@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Document</title>
+</head>
+<body>
+
+    <div class="game">
+    <canvas id="canvas"></canvas>
+
+    <div id="hud" style="
+    position: absolute;
+    top: 10px;
+    left: 80%;
+    font-size: 18px;
+    width: 180px;
+    opacity: 0.7;
+">
+    <div>
+        <strong>Disparos:</strong> 
+        <span id="shots">0</span>/<span id="maxShots">0</span>
+    </div>
+    <div id="cooldown" style="margin-top:5px;  color:#ff4444;  font-weight:bold;"></div>
+    <div id="recharge" style="margin-top:5px;  color:#00ff88;"></div>
+</div>
+
+    <span class="score-container">
+        <strong>Score:</strong>
+        <span class="score">0</span>
+    </span>
+    <div class="menu">
+        <h2>SPACE GAME</h2>
+        <div class="play-game">
+            <ion-icon name="play-outline"></ion-icon>
+        </div>
+    </div>
+    </div>
+
+
+
+    <img hidden id="spritesheet" src="spaceShooter2_spritesheet.png" alt="spritesheet">
+
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <script src="scripts/script.js" type="module"></script>
+</body>
+</html>
