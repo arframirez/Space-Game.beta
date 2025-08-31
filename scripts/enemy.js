@@ -1,0 +1,108 @@
+import { Object } from "./object.js";
+import { Projectile } from "./projectile.js";
+
+
+export class Enemy {
+    constructor(ctx,spritesheet,canvas,ship) {
+        this.ctx = ctx;
+        this.spritesheet = spritesheet;
+        this.position = {x: 500, y: 200};
+        this.angle = 0;
+        this.canvas = canvas;
+        this.ship = ship;
+        this.angle = 0;
+        this.image = new Object(spritesheet, {x: 662, y: -1}, 94, 148, 0.4);
+        this.imageParts = new Object(spritesheet, {x: 992, y: 564}, 37, 72, 0.54);
+        this.speed = 2;
+        this.death = false;
+    }
+        draw() {
+
+        this.ctx.save();
+
+        this.ctx.translate(this.position.x, this.position.y);
+        this.ctx.rotate(this.angle + Math.PI / 2);
+        this.ctx.translate(-this.position.x, -this.position.y);
+        this.image.draw(this.ctx, this.position);
+        this.imageParts.draw(this.ctx, {x: this.position.x + 16, y: this.position.y + 9});
+        this.ctx.restore();
+          
+        this.ctx.save();
+
+        this.ctx.translate(this.position.x, this.position.y);
+        this.ctx.rotate(this.angle + Math.PI / 2);
+        this.ctx.scale(-1, 1);
+        this.ctx.translate(-this.position.x, -this.position.y);
+        this.imageParts.draw(this.ctx, {x: this.position.x + 16, y: this.position.y + 9});
+
+        this.ctx.restore();
+      
+    }
+    createProjectile(projectiles) {
+        let num = Math.floor(Math.random() * (50)) + 1;
+        if(num===2){
+        let projectile = new Projectile(
+            this.ctx,
+            this.spritesheet,
+            { x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 },
+            this.angle + Math.PI / -2,
+            true
+        );
+        projectile.speed = 5;
+        projectiles.push(projectile);
+    }
+    }
+        collision(canvas) {
+        if ((this.position.x - this.image.radio > canvas.width || this.position.y - this.image.radio > canvas.height || this.position.x + this.image.radio < 0 || this.position.y + this.image.radio < 0) && this.death) {
+            return true;
+        }
+        return false;
+    }
+    hitbox() {
+        this.ctx.beginPath();
+        this.ctx.arc(this.position.x, this.position.y, this.image.radio, 0, Math.PI * 2);
+        this.ctx.strokeStyle = 'red';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+    }
+        generatePosition(canvas) {
+        let num = Math.floor(Math.random() * (4)) + 1;
+        let x,y;
+        switch(num) {
+            case 1:
+                x = Math.random() * canvas.width;
+                y = -this.image.height;
+                break;
+            case 2:
+                x = canvas.width + this.image.width;
+                y = Math.random() * canvas.height;
+                break;
+            case 3:
+                x = Math.random() * canvas.width;
+                y = canvas.height + this.image.height;
+                break;
+            case 4:
+                x = - this.image.width;
+                y = Math.random() * canvas.height;
+                break;
+        }
+        this.position = { x:x, y:y };
+    }
+    update(boolean){
+        this.draw();
+        if(boolean)this.hitbox();
+        let v1 = {
+            x: this.ship.position.x - this.position.x,
+            y: this.ship.position.y - this.position.y
+        } 
+        let mag = Math.sqrt(v1.x * v1.x + v1.y * v1.y); 
+        let vU = {
+            x: v1.x / mag,
+            y: v1.y / mag
+        };
+
+        this.angle = Math.atan2(vU.y, vU.x);
+        this.position.x += vU.x * this.speed;
+        this.position.y += vU.y * this.speed;
+    }
+}
