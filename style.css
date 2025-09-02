@@ -10,11 +10,13 @@ body{
       font-family: "Bitcount Grid Double", system-ui;
       font-weight: 400;
       background-color: #242739;
-      width: 100%;
-      height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
+      -webkit-user-select: none; /* 📱 Evita selección de texto */
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
 }
 
 .game{
@@ -71,13 +73,279 @@ h2{
       font-size: 18px;
       font-weight: 500;
       opacity: 0.7;
-      /* display: flex;
+      display: flex;
       justify-content: center;
       align-items: center;
       flex-direction: column;
-      margin-top: 30px; */
+      padding: 1px 10px;
+      
 }
-.score{
+
+/* Botón de disparo */
+.button{
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      z-index: 1001;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(10px);
+}
+
+.button:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: scale(1.1);
+}
+
+.button:active {
+      transform: scale(0.95);
+      background: rgba(255, 255, 255, 0.3);
+}
+
+.button ion-icon {
+      font-size: 32px;
+      color: white;
+}
+.nipple{
+      position: absolute;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 999;
+}
+.score, .high-score{
       font-size: 24px;
       font-weight: 700;
 }
+
+.high-score-container{
+       position: absolute;
+       width: 150px;
+       left: 43%;
+       top: 0;
+       margin: 5px;
+       font-size: 18px;
+       font-weight: 500;
+       opacity: 0.7;
+       display: flex;
+       justify-content: center;
+       align-items: center;
+       flex-direction: column;
+}
+
+/* 📱 Estilos responsivos para móviles */
+#canvas {
+    display: block;
+    background: transparent;
+    touch-action: none; /* Evita gestos del navegador como zoom */
+}
+
+/* Media queries para móviles */
+@media (max-width: 768px) {
+    html, body {
+        padding: 0;
+        margin: 0;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        overflow: hidden;
+    }
+    
+    .game {
+        width: 100vw;
+        height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+    }
+    
+    #canvas {
+        width: 100vw !important;
+        height: 100vh !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        object-fit: cover;
+    }
+    
+    .score-container {
+        font-size: 16px;
+        z-index: 1001;
+        left: 10% !important;
+        top: 5px !important;
+    }
+    
+    .high-score-container {
+        font-size: 16px;
+        z-index: 1001;
+        left: 35% !important;
+        top: 5px !important;
+        width: 130px !important;
+    }
+    
+    #hud {
+        font-size: 16px !important;
+        z-index: 1001;
+        left: 65% !important;
+        top: 5px !important;
+        width: 150px !important;
+    }
+    
+    h2 {
+        font-size: 8vw; /* Responsive font size */
+    }
+    
+    .menu ion-icon {
+        font-size: 8vw;
+    }
+    
+    /* Ajustar joystick para móviles portrait */
+    #joystick-zone {
+        width: 40% !important;
+        height: 50% !important;
+        bottom: 0px !important;
+        left: 0px !important;
+        overflow: hidden !important;
+        max-width: calc(100vw - 20px) !important;
+        max-height: calc(100vh - 20px) !important;
+    }
+    
+    /* Ajustar botón para móviles portrait */
+    .button {
+        width: 150px !important;
+        height: 150px !important;
+        bottom: 20px !important;
+        right: 20px !important;
+    }
+    
+    .button ion-icon {
+        font-size: 28px !important;
+    }
+}
+
+/* Para pantallas muy pequeñas */
+@media (max-width: 480px) {
+    .score-container {
+        font-size: 14px;
+    }
+    
+    .high-score-container {
+        font-size: 14px;
+        width: 120px;
+    }
+    
+    #hud {
+        font-size: 14px !important;
+        width: 150px !important;
+    }
+}
+
+/* 🔄 Orientación horizontal para móviles */
+@media screen and (orientation: landscape) and (max-height: 768px) {
+    /* Ajustar joystick para landscape - Área más amplia */
+    #joystick-zone {
+        width: 50% !important;
+        height: 90% !important;
+        bottom: 0px !important;
+        left: 0px !important;
+        overflow: visible !important;
+        max-width: none !important;
+        max-height: none !important;
+    }
+    
+    /* Ajustar botón para landscape */
+    .button {
+        width: 100px !important;
+        height: 100px !important;
+        bottom: 15px !important;
+        right: 15px !important;
+    }
+    
+    .button ion-icon {
+        font-size: 40px !important;
+    }
+    
+    /* Ajustar HUD para landscape */
+    #hud {
+        font-size: 14px !important;
+        left: 50% !important;
+        top: 5px !important;
+        width: 150px !important;
+    }
+    
+    .score-container {
+        font-size: 14px;
+        top: 5px !important;
+        left: 5px !important;
+    }
+    
+    .high-score-container {
+        font-size: 14px;
+        width: 120px;
+        left: 30% !important;
+        top: 5px !important;
+    }
+    
+    /* Menú responsive en landscape */
+    h2 {
+        font-size: 6vw !important;
+        margin-bottom: 15px !important;
+    }
+    
+    .menu ion-icon {
+        font-size: 6vw !important;
+        margin-bottom: 15px !important;
+    }
+}
+/* 🔄 Orientación horizontal para pantallas muy pequeñas 
+@media screen and (orientation: landscape) and (max-height: 480px) {
+    #joystick-zone {
+        width: 80px !important;
+        height: 80px !important;
+        bottom: 5px !important;
+        left: 5px !important;
+    }
+    
+    .button {
+        width: 50px !important;
+        height: 50px !important;
+        bottom: 5px !important;
+        right: 5px !important;
+    }
+    
+    .button ion-icon {
+        font-size: 20px !important;
+    }
+    
+    #hud {
+        font-size: 12px !important;
+        left: 45% !important;
+        top: 2px !important;
+        width: 140px !important;
+    }
+    
+    .score-container {
+        font-size: 12px;
+        top: 2px !important;
+    }
+    
+    .high-score-container {
+        font-size: 12px;
+        width: 100px;
+        left: 25% !important;
+        top: 2px !important;
+    }
+}  */

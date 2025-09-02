@@ -1,13 +1,29 @@
 import { Projectile } from "./projectile.js";
 import {Object} from "./object.js";
+
 export class Ship{
     constructor(ctx, spritesheet, canvas) {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
-        this.image = new Object(spritesheet,{x: 277, y: 0}, 170, 151, 0.4);
-        this.imageEff = new Object(spritesheet,{x: 549, y: 322}, 13, 30, 0.8);
-        this.position = {x: 200, y: 200};
         this.canvas = canvas;
+        
+        // 📱 Escala dinámica para móviles y orientación
+        const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
+        const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth < 768;
+        let mobileScale;
+        
+        if (isLandscape) {
+            mobileScale = 0.4; // Más pequeña en landscape para pantallas anchas
+        } else if (isMobile) {
+            mobileScale = 0.6; // Tamaño normal para móvil en portrait
+        } else {
+            mobileScale = 1; // Tamaño completo en desktop
+        }
+        
+        this.btn = document.querySelector(".button");
+        this.image = new Object(spritesheet,{x: 277, y: 0}, 170, 151, 0.5 * mobileScale);
+        this.imageEff = new Object(spritesheet,{x: 549, y: 322}, 13, 30, 0.6 * mobileScale);
+        this.position = {x: 200, y: 200};
         this.speed = 0
         this.projectiles = [];
         this.keys = {
@@ -31,7 +47,6 @@ export class Ship{
     }
 
 
-
     collisionCanvas(){
         if (this.position.x - this.image.radio > this.canvas.width) this.position.x = 0;
         if (this.position.y - this.image.radio > this.canvas.height) this.position.y = 0;
@@ -50,30 +65,57 @@ export class Ship{
 
         this.ctx.restore();
     }
-    move() {
-        if(this.keys.D) this.angle += 0.08; 
-        if(this.keys.A) this.angle -= 0.08;
+move() {
+    // --- 1) Detección de entorno
+    const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
 
-        if (this.keys.W) {
-            this.speed += 0.09;
-            if (this.speed >= 7) this.speed = 7;
-              this.imageEff.scale += 0.009;
-              this.imageEff.width = this.imageEff.paddleWidth * this.imageEff.scale;
-              this.imageEff.height = this.imageEff.paddleHeight * this.imageEff.scale;
-            if (this.imageEff.scale >= 0.9) this.imageEff.scale = 0.9;
-          } else {
-              this.imageEff.scale -= 0.01;
-              if (this.imageEff.scale <= 0) this.imageEff.scale = 0;
-              this.imageEff.width = this.imageEff.paddleWidth * this.imageEff.scale;
-              this.imageEff.height = this.imageEff.paddleHeight * this.imageEff.scale;
-          }
-        if (!this.keys.W) {
-            this.speed -= 0.07;
-            if (this.speed <= 0) this.speed = 0;
-        }
-           this.position.x += Math.cos(this.angle-Math.PI / -2) * this.speed;
-            this.position.y += Math.sin(this.angle-Math.PI / -2) * this.speed;
-        }
+    // Configuración de velocidad adaptable
+    const maxSpeed = isMobile ? 5 : 10;      // Máxima velocidad
+    const acceleration = isMobile ? 0.15 : 0.25;  // Aceleración más suave en móvil
+    const deceleration = isMobile ? 0.08 : 0.12;  // Frenado también más lento
+
+    // --- 2) Rotación por teclado (desktop)
+    if (this.keys.D) this.angle += 0.08;
+    if (this.keys.A) this.angle -= 0.08;
+
+    // --- 3) Intensidad del joystick (móvil)
+    const jIntensity = window.joystickIntensity || 0;
+    const jDir = window.joystickDirection || { x: 0, y: 0 };
+
+    let thrusting = false;
+
+    // --- 4) Control con joystick prioritario
+    if (jIntensity > 0.05) {
+        this.angle = Math.atan2(jDir.y, -jDir.x) + Math.PI / 2;
+        this.speed = Math.min(maxSpeed, maxSpeed * jIntensity);
+        thrusting = true;
+    } else if (this.keys.W) {
+        // Control con teclado en desktop
+        this.speed += acceleration;
+        if (this.speed >= maxSpeed) this.speed = maxSpeed;
+        thrusting = true;
+    }
+
+    // --- 5) Desaceleración si no hay empuje
+    if (!thrusting) {
+        this.speed -= deceleration;
+        if (this.speed < 0) this.speed = 0;
+    }
+
+    // --- 6) Efecto de propulsión
+    if (thrusting) {
+        this.imageEff.scale = Math.min(0.7, this.imageEff.scale + 0.02);
+    } else {
+        this.imageEff.scale = Math.max(0, this.imageEff.scale - 0.02);
+    }
+    this.imageEff.width = this.imageEff.paddleWidth * this.imageEff.scale;
+    this.imageEff.height = this.imageEff.paddleHeight * this.imageEff.scale;
+
+    // --- 7) Movimiento final
+    this.position.x += Math.cos(this.angle - Math.PI / -2) * this.speed;
+    this.position.y += Math.sin(this.angle - Math.PI / -2) * this.speed;
+}
+
 
     updateProjectiles(boolean) {
         this.projectiles.forEach((projectile,i) => {
@@ -109,9 +151,29 @@ export class Ship{
 
     // Si está bloqueado, mostrar temporizador de cooldown
     if (this.blocked) {
-        this.hudCooldown.textContent = "Recargando...";
-        this.hudRecharge.textContent = "";
-    } 
+
+    this.hudRecharge.textContent = "";
+
+    let remaining = 4;
+
+    // 🔹 Evitamos múltiples intervalos simultáneos
+    if (this.cooldownTimer) return;
+
+    this.cooldownTimer = setInterval(() => {
+        this.hudCooldown.textContent = `Bloqueado: ${remaining}s`;
+        remaining--;
+
+        // Cuando el tiempo termina, desbloqueamos disparos
+        if (remaining < 0) {
+            clearInterval(this.cooldownTimer);
+            this.cooldownTimer = null;
+
+            this.blocked = false;
+            this.startRecharge();
+            this.hudCooldown.textContent = "";
+        }
+    }, 1000);
+       }
     // Si se está regenerando, mostramos progreso
     else if (this.recharging && this.availableShots < this.maxShots) {
         this.hudCooldown.textContent = "";
@@ -174,23 +236,42 @@ export class Ship{
                  if (this.availableShots === 0) {
                   this.blocked = true;
 
-                   let remaining = 1 / 1;
-                    this.hudCooldown.textContent = `Bloqueado: ${remaining}s`;
-
-                   const cooldownInterval = setInterval(() => {
-                    remaining--;
-                   this.hudCooldown.textContent = `Bloqueado: ${remaining}s`;
-
-                     if (remaining <= 0) {
-                       clearInterval(cooldownInterval);
-                        this.blocked = false;
-                        this.startRecharge();
-                     }
-                 }, 1000);
              }
                 }
             }
         });
+
+        document.addEventListener('touchstart', (e) => {
+            if (e.target === this.btn) {
+                if (!this.blocked && this.availableShots > 0) {
+                    // Crear proyectiles
+                    this.projectiles.push(
+                        new Projectile(
+                            this.ctx,
+                            this.spritesheet,
+                            { x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 },
+                            this.angle
+                        ),
+                        new Projectile(
+                            this.ctx,
+                            this.spritesheet,
+                            { x: this.position.x - Math.cos(this.angle) * 14, y: this.position.y - Math.sin(this.angle) * 14 },
+                            this.angle
+                        )
+                    );
+
+                    this.availableShots--;
+                    if (!this.recharging) this.startRecharge();
+
+                    if (this.availableShots === 0) {
+                        this.blocked = true;
+                    }
+                }
+            }
+        });
+
+           
+
         document.addEventListener('keyup', (e) => {
             if (e.key === 'a' || e.key === 'A'){ 
                 this.keys.A = false;

@@ -9,9 +9,14 @@ export  class Asteroid {
         this.death = false;
         this.type = type;
         this.angle = (Math.random() * (360) * Math.PI/180);
-        this.scale = Math.random() * (0.6 - 0.4) + 0.4;
+        
+        // 📱 Escala dinámica para móviles
+        const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
+        const mobileScale = isMobile ? 0.7 : 1.0; // 70% en móvil, 100% en desktop
+        
+        this.scale = (Math.random() * (0.6 - 0.4) + 0.4) * mobileScale;
         if (this.type === 3){
-            this.scale = Math.random() * (0.3 - 0.15) + 0.15;
+            this.scale = (Math.random() * (0.3 - 0.15) + 0.15) * mobileScale;
             this.speed = Math.random() * (8 - 5) + 5;
         }
         this.speed = Math.random() * (3 - 2) + 2;

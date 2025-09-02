@@ -11,8 +11,13 @@ export class Enemy {
         this.canvas = canvas;
         this.ship = ship;
         this.angle = 0;
-        this.image = new Object(spritesheet, {x: 662, y: -1}, 94, 148, 0.4);
-        this.imageParts = new Object(spritesheet, {x: 992, y: 564}, 37, 72, 0.54);
+        
+        // 📱 Escala dinámica para móviles
+        const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
+        const mobileScale = isMobile ? 0.65 : 1.0; // 65% en móvil, 100% en desktop
+        
+        this.image = new Object(spritesheet, {x: 662, y: -1}, 94, 148, 0.4 * mobileScale);
+        this.imageParts = new Object(spritesheet, {x: 992, y: 564}, 37, 72, 0.54 * mobileScale);
         this.speed = 2;
         this.death = false;
     }

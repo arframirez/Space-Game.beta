@@ -2,14 +2,19 @@ import { Object } from './object.js';
 export class Projectile {
     constructor(ctx, spritesheet, position, angle, type) {
         this.ctx = ctx;
-        this.image = new Object(spritesheet, {x: 1092, y: 458}, 20, 35, 0.7);
-        this.imageEff = new Object(spritesheet, {x: 549, y: 384}, 13, 30, 0.5);
+        
+        // 📱 Escala dinámica para móviles
+        const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
+        const mobileScale = isMobile ? 0.8 : 1.0; // 80% en móvil, 100% en desktop
+        
+        this.image = new Object(spritesheet, {x: 1092, y: 458}, 20, 35, 0.7 * mobileScale);
+        this.imageEff = new Object(spritesheet, {x: 549, y: 384}, 13, 30, 0.5 * mobileScale);
         this.position = position;
         this.angle = angle;
         this.speed = 15;
         this.type = type;
         if(type){
-            this.image = new Object(spritesheet, {x: 521, y: 299}, 16, 48, 0.8);
+            this.image = new Object(spritesheet, {x: 521, y: 299}, 16, 48, 0.8 * mobileScale);
         }
     }
 
