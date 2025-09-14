@@ -3,7 +3,8 @@ import {Asteroid} from "./asteroid.js";
 import { Label } from "./label.js";
 import { Enemy } from "./enemy.js";
 import { Star } from "./star.js";
-import { Projectile } from "./projectile.js";
+import { Explosion } from "./explosion.js";
+import { AudioManager } from "./AudioManager.js";
 
 
 const canvas = document.getElementById('canvas');
@@ -13,7 +14,10 @@ const font = window.getComputedStyle(document.body).fontFamily;
 const fontWeight = window.getComputedStyle(document.body).fontWeight;
 const menu = document.querySelector('.menu');
 const score = document.querySelector('.score');
+const rewardButton = document.getElementById('reward-button');
 const btnMenu = document.querySelector('.play-game');
+const muteButton = document.getElementById('mute-button');
+const muteIcon = muteButton.querySelector('ion-icon');
 
 const highScoreElement = document.querySelector('.high-score');
 
@@ -49,15 +53,59 @@ window.addEventListener('orientationchange', () => {
 let hitBox = false;
 let menuStatus = true
 let play = false
+let hasBonus = false;
+let lastAdTime = 0;
+const adCooldown = 120000; // 2 minutos en milisegundos
+
 let scoreCount = 0;
 
-const ship = new Ship(ctx, spritesheet, canvas);
+const audioManager = new AudioManager();
+const ship = new Ship(ctx, spritesheet, canvas, audioManager); // 🔊 Pasamos el gestor de audio a la nave
 const asteroids = [];
 const labels = [];
 const enemies = [];
 const projectilesEnemy = [];
+const explosions = [];
 const stars = [];
-let highScore = localStorage.getItem('high-score') || 0;
+let highScore = 0;
+let asteroidInterval = null;
+let enemyInterval = null;
+
+let crazySDK = null;
+
+// Función para inicializar el SDK de CrazyGames
+async function initCrazyGamesSDK() {
+    try {
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+            await window.CrazyGames.SDK.init();
+            crazySDK = window.CrazyGames.SDK;
+            console.log("✅ SDK de CrazyGames inicializado.");
+
+            // Escuchar eventos de anuncios para depuración
+            crazySDK.addEventListener("adStarted", () => console.log("Anuncio iniciado."));
+            crazySDK.addEventListener("adFinished", () => console.log("Anuncio finalizado."));
+            crazySDK.addEventListener("adError", (error) => console.log("Error en anuncio:", error));
+        }
+    } catch (error) {
+        console.warn("⚠️ SDK de CrazyGames no se pudo inicializar. Los anuncios y guardado en la nube no funcionarán.", error);
+    }
+}
+
+function loadAssets() {
+    audioManager.loadSound('explosion', '../explosion-312361.mp3');
+    audioManager.loadSound('shoot', '../cannon-fire-161072.mp3');
+}
+
+async function loadHighScore() {
+    // Ahora usamos el SDK si está disponible, si no, localStorage
+    if (crazySDK) {
+        const savedScore = crazySDK.data.getItem("high-score");
+        highScore = savedScore ? Number(savedScore) : 0;
+    } else {
+        highScore = Number(localStorage.getItem("high-score")) || 0;
+    }
+    highScoreElement.innerHTML = `${highScore}`;
+}
 
 // 📱 Crear joystick responsivo
 function createResponsiveJoystick() {
@@ -136,50 +184,99 @@ const shootButton = document.querySelector('.button');
 if (shootButton) {
     // Función para disparar (reutilizada del código de teclado)
     function shoot() {
-        if (!ship.blocked && ship.availableShots > 0) {
-            ship.projectiles.push(
-                new Projectile(
-                    ctx,
-                    spritesheet,
-                    { x: ship.position.x + Math.cos(ship.angle) * 14, y: ship.position.y + Math.sin(ship.angle) * 14 },
-                    ship.angle
-                ),
-                new Projectile(
-                    ctx,
-                    spritesheet,
-                    { x: ship.position.x - Math.cos(ship.angle) * 14, y: ship.position.y - Math.sin(ship.angle) * 14 },
-                    ship.angle
-                )
-            );
-            
-            ship.availableShots--;
-            if (!ship.recharging) ship.startRecharge();
-            
-            if (ship.availableShots === 0) {
-                ship.blocked = true;
-            }
-        }
+        // Llama al método centralizado en la clase Ship
+        ship.shoot();
     }
     
     // Eventos del botón (tanto mouse como touch)
     shootButton.addEventListener('click', shoot);
     shootButton.addEventListener('touchstart', (e) => {
+        audioManager.unlockAudio(); // Desbloquea el audio en la primera interacción táctil
         e.preventDefault(); // Prevenir double-tap y otros gestos
         shoot();
     });
 }
 
+if (rewardButton) {
+    rewardButton.addEventListener('click', async () => {
+        if (!crazySDK) {
+            alert("CrazyGames SDK not available.");
+            return;
+        }
+
+        try {
+            // Solicitar un anuncio con recompensa
+            await crazySDK.ad.requestAd("rewarded");
+
+            // Si el anuncio se vio con éxito, se aplica la recompensa
+            hasBonus = true;
+            
+            // Actualizar la UI para mostrar que el bonus está activo
+            rewardButton.style.display = 'none'; // Ocultar el botón
+            
+            const bonusMessage = document.createElement('p');
+            bonusMessage.id = "bonus-message";
+            bonusMessage.textContent = "Bonus activated! More shots for the next game.";
+            bonusMessage.style.color = "#00ff88";
+            bonusMessage.style.marginTop = "20px";
+            rewardButton.after(bonusMessage); // Añadir mensaje después del botón
+
+        } catch (e) {
+            console.error("Rewarded ad error:", e);
+             //Opcional: informar al usuario que el anuncio falló
+            alert("Could not load the ad. Please try again later.");
+        }
+    });
+}
+
+if (muteButton) {
+    muteButton.addEventListener('click', () => {
+        audioManager.isMuted = !audioManager.isMuted;
+        muteIcon.name = audioManager.isMuted ? 'volume-mute-outline' : 'volume-high-outline';
+    });
+}
+
 btnMenu.addEventListener('click', () => {
+         audioManager.unlockAudio(); // Desbloquea el audio cuando el jugador presiona "Play"
         init(); 
 });
-function gameOver() {
+async function gameOver() {
     play = false;
-    setTimeout(() => {
-        menu.style.display = 'flex';
-        menuStatus = true;
-    }, 500);
+    window.CrazyGames.SDK.game.gameplayStop();
+
+    // Creamos una explosión en la posición de la nave y la ocultamos
+    explosions.push(new Explosion(ctx, spritesheet, ship.position, 1.5));
+    audioManager.playSound('explosion', 1.0); // Toca el sonido de explosión
+    ship.position = {x: -1000, y: -1000};
+
+    // Muestra un anuncio "midgame" si ha pasado suficiente tiempo
+    const now = Date.now();
+    if (crazySDK && now - lastAdTime > adCooldown) {
+        try {
+            await crazySDK.ad.requestAd("midgame");
+             lastAdTime = now; // Actualiza el tiempo solo si el anuncio se mostró
+        } catch (e) {
+            console.error("Ad error:", e);
+        }
+    }
+
+    // Después del anuncio (o si falla/se omite), muestra el menú
+    menu.style.display = 'flex';
+    menuStatus = true;
+
+    // Restaura el botón de recompensa para la siguiente sesión
+    const bonusMessage = document.getElementById('bonus-message');
+    if (bonusMessage) {
+        bonusMessage.remove();
+    }
+    if (rewardButton) {
+        rewardButton.style.display = 'block';
+    }
 }
 function init() {
+
+    window.CrazyGames.SDK.game.gameplayStart();
+
     score.innerHTML = 0;
     scoreCount = 0;
 
@@ -189,6 +286,7 @@ function init() {
     labels.length = 0;
     enemies.length = 0;
     projectilesEnemy.length = 0;
+    explosions.length = 0;
 
     // Reiniciamos la nave
     ship.position = { x: 200, y: 200 };
@@ -196,22 +294,39 @@ function init() {
     ship.speed = 0;
     ship.angle = 0;
 
-    // 🔹 Reiniciamos limitador de disparos y bloqueo
+    // 🔹 Aplicar bonus si está activo
+    if (hasBonus) {
+        ship.maxShots = 15; // El original es 10
+        hasBonus = false; // Usar el bonus solo una vez
+    } else {
+        ship.maxShots = 10; // Valor por defecto
+    }
+
+            // 🔹 Reiniciamos limitador de disparos y bloqueo
     ship.availableShots = ship.maxShots;  // Restaura todos los disparos disponibles
     ship.blocked = false;                 // Desbloqueamos disparos
-    ship.recharging = false;              // Detenemos recarga automática
-
+    ship.recharging = false;              // Detenemos recarga automática 
     // Si usas un intervalo de recarga, mejor lo reiniciamos aquí también
+    clearInterval(ship.rechargeInterval);
     if (ship.rechargeInterval) {
         clearInterval(ship.rechargeInterval);
         ship.rechargeInterval = null;
     }
+
+    // 🔹 Limpiamos los intervalos anteriores para evitar duplicados
+    if (asteroidInterval) clearInterval(asteroidInterval);
+    if (enemyInterval) clearInterval(enemyInterval);
+
+    // 🔹 Reiniciamos la generación de objetos
+    generateAsteroids();
+    generateEnemies();
 
     menu.style.display = 'none';
     menuStatus = false;
     play = true;
 }
 function createStars() {
+    
     for (let i = 0; i < 10; i++) {
         let star = new Star(ctx, canvas, { x: Math.random() * (canvas.width), y: Math.random() * (canvas.height) }, Math.random() * (1.5 - 1) + 1, 1);
         stars.push(star);
@@ -222,7 +337,7 @@ function createStars() {
     }
 }
 function generateEnemies() {
-    setInterval(() => {
+    enemyInterval = setInterval(() => {
         let enemy = new Enemy(ctx, spritesheet, canvas, ship);
         enemy.generatePosition(canvas);
         enemies.push(enemy);
@@ -231,6 +346,7 @@ function generateEnemies() {
         }, 3000);
     }, 7000);
 }
+
 function collision(Object1, Object2) {
     let v1 = Object1.position
     let v2 = Object2.position;
@@ -257,106 +373,94 @@ function createMeteors(position) {
      }
 }
 function collisionObjects(){
-    for(let i = 0; i < asteroids.length; i++) {
+    // Colisión de la nave con asteroides y enemigos
+    for (let i = asteroids.length - 1; i >= 0; i--) {
         if (collision(ship, asteroids[i])) {
             gameOver();
             return;
         }
     }
-    for(let i = 0; i < ship.projectiles.length; i++) { 
-        for(let j = 0; j < projectilesEnemy.length; j++) {
-            if (collision(ship.projectiles[i], projectilesEnemy[j])) {
-            projectilesEnemy.splice(j, 1);
-            }
-        }
-    }
-
-    for(let i = 0; i < projectilesEnemy.length; i++) {
-        for(let j = 0; j < asteroids.length; j++) {
-        if (collision(asteroids[j], projectilesEnemy[i])) {
-            asteroids.splice(j, 1);
-            projectilesEnemy.splice(i, 1);
-            i--;
-            break;
-        }
-    }
-}
-
-    for(let i = 0; i < enemies.length; i++) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
         if (collision(enemies[i], ship)) {
             gameOver();
             return;
         }
     }
-
-    for (let i = 0; i < projectilesEnemy.length; i++) {
-        const element = projectilesEnemy[i];
-        if (collision(element, ship)) {
+    for (let i = projectilesEnemy.length - 1; i >= 0; i--) {
+        if (collision(projectilesEnemy[i], ship)) {
             gameOver();
             return;
         }
     }
 
-    // ⬇️ Estos dos bucles deben estar dentro de collisionObjects()
-    loop1:
-    for(let i = 0; i < ship.projectiles.length; i++) { 
-        for(let j = 0; j < enemies.length; j++) {
+    // Colisiones de proyectiles del jugador
+    for (let i = ship.projectiles.length - 1; i >= 0; i--) {
+        let projectileDestroyed = false;
+
+        // Con enemigos
+        for (let j = enemies.length - 1; j >= 0; j--) {
             if (collision(ship.projectiles[i], enemies[j])) {
-                setTimeout(() => {
-                    let text = new Label(ctx, enemies[j].position, '+20 Puntos', '#00ff00', font, fontWeight);
-                    labels.push(text);
-                    ship.projectiles.splice(i, 1);
-                    enemies.splice(j, 1);
-                    scoreCount += 20;
-                    score.innerHTML = scoreCount;
+                let text = new Label(ctx, enemies[j].position, '+20 Score', '#00ff00', font, fontWeight);
+                labels.push(text);
+                scoreCount += 20;
 
-                }, 0);
-                break loop1;
+                // Crear explosión para el enemigo
+                explosions.push(new Explosion(ctx, spritesheet, enemies[j].position, 1.2));
+                audioManager.playSound('explosion', 0.8); // Sonido un poco más bajo
+
+                enemies.splice(j, 1);
+                ship.projectiles.splice(i, 1);
+                projectileDestroyed = true;
+                break; // Salir del bucle de enemigos, el proyectil ya no existe
             }
         }
-    }
 
-    loop2:
-    for(let i = 0; i < ship.projectiles.length; i++) {
-        for(let j = 0; j < asteroids.length; j++) {
+        if (projectileDestroyed) continue; // Ir al siguiente proyectil
+
+        // Con asteroides
+        for (let j = asteroids.length - 1; j >= 0; j--) {
             if (collision(ship.projectiles[i], asteroids[j])) {
-                setTimeout(() => {
-                    if (asteroids[j].type === 1) {
-                        let text = new Label(ctx, asteroids[j].position, '+10 Puntos', '#ffffff', font, fontWeight);
-                        labels.push(text);
-                        ship.projectiles.splice(i, 1);
-                        asteroids.splice(j, 1);
-                        scoreCount += 10;
-                        score.innerHTML = scoreCount;                      
-                    } else if (asteroids[j].type === 2) {
-                        createMeteors(asteroids[j].position);
-                        ship.projectiles.splice(i, 1);
-                        asteroids.splice(j, 1);
-                    } else {
-                        let text = new Label(ctx, asteroids[j].position, '+5 Puntos', 'red', font, fontWeight);
-                        labels.push(text);
-                        ship.projectiles.splice(i, 1);
-                        asteroids.splice(j, 1);
-                        scoreCount += 5;
-                        score.innerHTML = scoreCount;
-                    }
-                    highScore = scoreCount >= highScore ? scoreCount : highScore;
-                    localStorage.setItem('high-score', highScore);
-                    highScoreElement.innerHTML = `${highScore} `;
-                }, 0);
-                break loop2;
+                // Crear explosión para el asteroide (escala relativa al tamaño del asteroide)
+                explosions.push(new Explosion(ctx, spritesheet, asteroids[j].position, asteroids[j].scale * 2.5));
+                audioManager.playSound('explosion', 0.6); // Sonido aún más bajo
+
+                if (asteroids[j].type === 1) {
+                    labels.push(new Label(ctx, asteroids[j].position, '+10 Score', '#ffffff', font, fontWeight));
+                    scoreCount += 10;
+                } else if (asteroids[j].type === 2) {
+                    createMeteors(asteroids[j].position);
+                } else {
+                    labels.push(new Label(ctx, asteroids[j].position, '+5 Score', 'red', font, fontWeight));
+                    scoreCount += 5;
+                }
+
+                asteroids.splice(j, 1);
+                ship.projectiles.splice(i, 1);
+                break; // Salir del bucle de asteroides
             }
         }
     }
-} 
+
+    // Actualizar puntuación y guardado al final
+    score.innerHTML = scoreCount;
+    if (scoreCount > highScore) {
+        highScore = scoreCount;
+        highScoreElement.innerHTML = `${highScore}`;
+        if (crazySDK) {
+            crazySDK.data.setItem("high-score", highScore);
+        } else {
+            localStorage.setItem("high-score", highScore); // Guardado local como fallback
+        }
+    }
+}
 function generateAsteroids() {
-    setInterval(() => {
-        let type = Math.floor(Math.random() * (2)) + 1;
+    asteroidInterval = setInterval(() => {
+        let type = Math.floor(Math.random() * (2)) + 1;  // Genera un tipo aleatorio (1 o 2)
         let asteroid = new Asteroid(ctx, spritesheet,{x:0,y:0}, type);
-        asteroid.generatePosition(canvas);
+        asteroid.generatePosition(canvas);  // Posiciona el asteroide en el canvas
         asteroids.push(asteroid);
         setTimeout(() => {
-            asteroid.death = true;
+               asteroid.death = true;
         }, 5000);
     }, 500);
 }
@@ -368,8 +472,11 @@ function background() {
     });
 }
 function updateObjects(){
-        ship.update(hitBox);
-    asteroids.forEach((asteroid,i) => {
+    // Solo actualizamos la nave si el juego está activo para que se congele al morir
+
+         ship.update(hitBox);
+
+    asteroids.forEach((asteroid, i) => {
         asteroid.update(hitBox);
         if (asteroid.collision(canvas)) {
             setTimeout(() => {
@@ -377,7 +484,7 @@ function updateObjects(){
             }, 0);
         }
     });
-    labels.forEach((label,i) => {
+    labels.forEach((label, i) => {
         label.update();
         if (label.opacity <= 0) {
             setTimeout(() => {
@@ -386,11 +493,11 @@ function updateObjects(){
         }
     });
 
-    projectilesEnemy.forEach((projectile,i) => {
+    projectilesEnemy.forEach((projectile, i) => {
         projectile.update();
     });
 
-    enemies.forEach((enemy,i) => {
+    enemies.forEach((enemy, i) => {
         enemy.update(hitBox);
         enemy.createProjectile(projectilesEnemy);
         if (enemy.collision(canvas)) {
@@ -399,21 +506,41 @@ function updateObjects(){
             }, 0);
         }
     });
-    
 }
+
 function update() {
-    
+
     if(menuStatus){
         background();
     } else if(play){
+        // El juego está activo
         background();
         collisionObjects();
         updateObjects();
-        
+    } else {
+        background();
+        updateObjects(); // Esto dibujará los objetos congelados
     }
+
+    // Las explosiones se actualizan y dibujan siempre, incluso después de "Game Over"
+    explosions.forEach((explosion, i) => {
+        explosion.update();
+        explosion.draw();
+        if (explosion.isFinished) {
+            explosions.splice(i, 1);
+        }
+    });
+
     requestAnimationFrame(update);
 }
-update();
-generateAsteroids();
-generateEnemies();
-createStars();
+
+// Función principal asíncrona para controlar el arranque
+async function main() {
+    await initCrazyGamesSDK(); // 1. Inicializar SDK
+    await loadHighScore();     // 2. Cargar puntuación (puede usar el SDK)
+    loadAssets();              // 3. Cargar assets
+    createStars();             // 4. Crear elementos visuales
+    update();                  // 5. Iniciar el bucle del juego
+}
+
+main(); // Iniciar el juego

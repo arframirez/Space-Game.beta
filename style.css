@@ -4,9 +4,11 @@
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      image-rendering: pixelated;
 }
 
 body{
+      overflow: hidden;
       font-family: "Bitcount Grid Double", system-ui;
       font-weight: 400;
       background-color: #242739;
@@ -15,6 +17,8 @@ body{
       align-items: center;
       -webkit-user-select: none; /* 📱 Evita selección de texto */
       -moz-user-select: none;
+      -webkit-tap-highlight-color: transparent; /* Quita el flash azul en iOS */
+      touch-action: manipulation;               /* Permite detectar toques */
       -ms-user-select: none;
       user-select: none;
 }
@@ -61,6 +65,28 @@ h2{
       transform: scale(1.3);
 }
 
+.hud-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 1001;
+    color: white;
+    font-size: 20px;
+}
+
+.hud-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .menu ion-icon{
       font-size: 30px;
       margin-bottom: 30px;
@@ -99,16 +125,19 @@ h2{
       transition: all 0.2s ease;
       backdrop-filter: blur(10px);
 }
-
+/* 
 .button:hover {
       background: rgba(255, 255, 255, 0.2);
       border-color: rgba(255, 255, 255, 0.5);
-      transform: scale(1.1);
-}
+      transform: rotate(-45deg) scale(1.1);
+      border-bottom: 25px solid rgba(255, 255, 255, 0.3);
+} */
 
 .button:active {
-      transform: scale(0.95);
-      background: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: rotate(-45deg) scale(1.1);
+      border-bottom: 25px solid rgba(255, 255, 255, 0.3);
 }
 
 .button ion-icon {
@@ -310,42 +339,3 @@ h2{
         margin-bottom: 15px !important;
     }
 }
-/* 🔄 Orientación horizontal para pantallas muy pequeñas 
-@media screen and (orientation: landscape) and (max-height: 480px) {
-    #joystick-zone {
-        width: 80px !important;
-        height: 80px !important;
-        bottom: 5px !important;
-        left: 5px !important;
-    }
-    
-    .button {
-        width: 50px !important;
-        height: 50px !important;
-        bottom: 5px !important;
-        right: 5px !important;
-    }
-    
-    .button ion-icon {
-        font-size: 20px !important;
-    }
-    
-    #hud {
-        font-size: 12px !important;
-        left: 45% !important;
-        top: 2px !important;
-        width: 140px !important;
-    }
-    
-    .score-container {
-        font-size: 12px;
-        top: 2px !important;
-    }
-    
-    .high-score-container {
-        font-size: 12px;
-        width: 100px;
-        left: 25% !important;
-        top: 2px !important;
-    }
-}  */

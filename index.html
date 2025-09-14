@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
     <link rel="stylesheet" href="style.css">
-    <title>Document</title>
+    <title>Astro Blaze</title>
 </head>
-<body>
+<body ontouchstart="">
 
     <div class="game">
     <canvas id="canvas"></canvas>
@@ -38,7 +38,7 @@
     opacity: 0.7;
 ">
     <div>
-        <strong>Disparos:</strong> 
+        <strong>Shots:</strong> 
         <span id="shots">0</span>/<span id="maxShots">0</span>
     </div>
     <div id="cooldown" style="margin-top:5px;  color:#ff4444;  font-weight:bold;"></div>
@@ -57,21 +57,33 @@
         <strong>Score:</strong>
         <span class="score">0</span>
     </span>
+    <!-- Botón de Silencio -->
+    <div id="mute-button" class="hud-button">
+        <ion-icon name="volume-high-outline"></ion-icon>
+    </div>
+
     <div class="menu">
-        <h2>SPACE GAME</h2>
+        <h2>Astro Blaze</h2>
         <div class="play-game">
             <ion-icon name="play-outline"></ion-icon>
+        </div>
+        <!-- Botón para anuncio con recompensa -->
+        <div id="reward-button" class="play-game" style="margin-top: 20px;">
+            <ion-icon name="gift-outline"></ion-icon>
+            <span style="font-size: 20px; vertical-align: middle; margin-left: 10px;">Get Bonus Shots!</span>
         </div>
     </div>
     </div>
 
 
 
-   
+
+
     <img hidden id="spritesheet" src="spaceShooter2_spritesheet.png" alt="spritesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.0/nipplejs.min.js"></script>
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
     <script src="scripts/script.js" type="module"></script>
    
 </body>

@@ -3,7 +3,6 @@ export  class Asteroid {
     constructor(ctx, spritesheet, position={x:0,y:0},type) {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
-        this.image = new Object();
         this.position = {...position};
         this.rotation = 0;
         this.death = false;

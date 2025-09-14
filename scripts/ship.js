@@ -2,10 +2,11 @@ import { Projectile } from "./projectile.js";
 import {Object} from "./object.js";
 
 export class Ship{
-    constructor(ctx, spritesheet, canvas) {
+    constructor(ctx, spritesheet, canvas, audioManager) {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
         this.canvas = canvas;
+        this.audioManager = audioManager; // Guardamos la referencia al gestor de audio
         
         // 📱 Escala dinámica para móviles y orientación
         const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
@@ -201,6 +202,35 @@ move() {
         }
     }, 1000);
 }
+    shoot() {
+        if (!this.blocked && this.availableShots > 0) {
+            // 🔊 Reproducir sonido de disparo
+            this.audioManager.playSound('shoot', 0.4);
+
+            // Crear proyectiles
+            this.projectiles.push(
+                new Projectile(
+                    this.ctx,
+                    this.spritesheet,
+                    { x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 },
+                    this.angle
+                ),
+                new Projectile(
+                    this.ctx,
+                    this.spritesheet,
+                    { x: this.position.x - Math.cos(this.angle) * 14, y: this.position.y - Math.sin(this.angle) * 14 },
+                    this.angle
+                )
+            );
+  
+            this.availableShots--;
+            if (!this.recharging) this.startRecharge();
+    
+            if (this.availableShots === 0) {
+                this.blocked = true;
+            }
+        }
+    }
     keyboard(){
         document.addEventListener('keydown', (e) => {
             if (e.key === 'a' || e.key === 'A') {
@@ -213,64 +243,9 @@ move() {
                 this.keys.W = true;
             }
             if ((e.key === "q" || e.key === "Q" || e.key === "ArrowUp")) {
-                if (!this.blocked && this.availableShots > 0) {
-                    // Crear proyectiles
-                    this.projectiles.push(
-                        new Projectile(
-                            this.ctx,
-                            this.spritesheet,
-                            { x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 },
-                            this.angle
-                        ),
-                        new Projectile(
-                            this.ctx,
-                            this.spritesheet,
-                            { x: this.position.x - Math.cos(this.angle) * 14, y: this.position.y - Math.sin(this.angle) * 14 },
-                            this.angle
-                        )
-                    );
-          
-                    this.availableShots--;
-                    if (!this.recharging) this.startRecharge();
-            
-                 if (this.availableShots === 0) {
-                  this.blocked = true;
-
-             }
-                }
+                this.shoot();
             }
         });
-
-        document.addEventListener('touchstart', (e) => {
-            if (e.target === this.btn) {
-                if (!this.blocked && this.availableShots > 0) {
-                    // Crear proyectiles
-                    this.projectiles.push(
-                        new Projectile(
-                            this.ctx,
-                            this.spritesheet,
-                            { x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 },
-                            this.angle
-                        ),
-                        new Projectile(
-                            this.ctx,
-                            this.spritesheet,
-                            { x: this.position.x - Math.cos(this.angle) * 14, y: this.position.y - Math.sin(this.angle) * 14 },
-                            this.angle
-                        )
-                    );
-
-                    this.availableShots--;
-                    if (!this.recharging) this.startRecharge();
-
-                    if (this.availableShots === 0) {
-                        this.blocked = true;
-                    }
-                }
-            }
-        });
-
-           
 
         document.addEventListener('keyup', (e) => {
             if (e.key === 'a' || e.key === 'A'){ 
