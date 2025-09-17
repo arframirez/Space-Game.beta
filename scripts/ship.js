@@ -202,10 +202,10 @@ move() {
         }
     }, 1000);
 }
-    shoot() {
+    async shoot() {
         if (!this.blocked && this.availableShots > 0) {
             // 🔊 Reproducir sonido de disparo
-            this.audioManager.playSound('shoot', 0.4);
+            this.audioManager.playSound('shoot', 1.0);
 
             // Crear proyectiles
             this.projectiles.push(
@@ -226,6 +226,7 @@ move() {
             this.availableShots--;
             if (!this.recharging) this.startRecharge();
     
+
             if (this.availableShots === 0) {
                 this.blocked = true;
             }
@@ -233,6 +234,7 @@ move() {
     }
     keyboard(){
         document.addEventListener('keydown', (e) => {
+
             if (e.key === 'a' || e.key === 'A') {
                 this.keys.A = true;
             }
@@ -242,10 +244,14 @@ move() {
             if (e.key === 'w' || e.key === 'W') {
                 this.keys.W = true;
             }
-            if ((e.key === "q" || e.key === "Q" || e.key === "ArrowUp")) {
+
+              if ((e.key === "q" || e.key === "Q" || e.key === "ArrowUp") && this.keys.shoot) {
                 this.shoot();
+                this.keys.shoot = false;
             }
+
         });
+
 
         document.addEventListener('keyup', (e) => {
             if (e.key === 'a' || e.key === 'A'){ 
@@ -261,7 +267,7 @@ move() {
 
             }
             if (e.key === "q" || e.key === "Q" || e.key === "ArrowUp") {
-                this.keys.shoot = true;
+               this.keys.shoot = true;
             }
         });
     }

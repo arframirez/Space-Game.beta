@@ -9,15 +9,16 @@ import { AudioManager } from "./AudioManager.js";
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+
 const spritesheet = document.getElementById('spritesheet');
 const font = window.getComputedStyle(document.body).fontFamily;
 const fontWeight = window.getComputedStyle(document.body).fontWeight;
 const menu = document.querySelector('.menu');
 const score = document.querySelector('.score');
 const rewardButton = document.getElementById('reward-button');
-const btnMenu = document.querySelector('.play-game');
 const muteButton = document.getElementById('mute-button');
-const muteIcon = muteButton.querySelector('ion-icon');
+const btnMenu = document.querySelector('.play-game');
+const muteIcon = muteButton ? muteButton.querySelector('ion-icon') : null;
 
 const highScoreElement = document.querySelector('.high-score');
 
@@ -44,7 +45,6 @@ function resizeCanvas() {
 }
 
 // Llamar la función al cargar, cuando cambie el tamaño y cuando cambie la orientación
-resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', () => {
     // Esperar un poco para que la orientación se aplique completamente
@@ -54,10 +54,13 @@ let hitBox = false;
 let menuStatus = true
 let play = false
 let hasBonus = false;
+let isAdPlaying = false; // 🔹 Nuevo: Estado para saber si un anuncio se está mostrando
+let wasMutedBeforeAd = false; // 🔹 Nuevo: Guarda el estado de silencio antes de un anuncio
 let lastAdTime = 0;
 const adCooldown = 120000; // 2 minutos en milisegundos
 
 let scoreCount = 0;
+
 
 const audioManager = new AudioManager();
 const ship = new Ship(ctx, spritesheet, canvas, audioManager); // 🔊 Pasamos el gestor de audio a la nave
@@ -82,9 +85,22 @@ async function initCrazyGamesSDK() {
             console.log("✅ SDK de CrazyGames inicializado.");
 
             // Escuchar eventos de anuncios para depuración
-            crazySDK.addEventListener("adStarted", () => console.log("Anuncio iniciado."));
-            crazySDK.addEventListener("adFinished", () => console.log("Anuncio finalizado."));
-            crazySDK.addEventListener("adError", (error) => console.log("Error en anuncio:", error));
+            crazySDK.addEventListener("adStarted", () => {
+                console.log("Anuncio iniciado, pausando el juego.");
+                isAdPlaying = true;
+                wasMutedBeforeAd = audioManager.isMuted;
+                audioManager.isMuted = true; // Silencia el juego durante el anuncio
+            });
+            crazySDK.addEventListener("adFinished", () => {
+                console.log("Anuncio finalizado, reanudando el juego.");
+                isAdPlaying = false;
+                audioManager.isMuted = wasMutedBeforeAd; // Restaura el estado de silencio
+            });
+            crazySDK.addEventListener("adError", (error) => {
+                console.log("Error en anuncio, reanudando el juego:", error);
+                isAdPlaying = false;
+                audioManager.isMuted = wasMutedBeforeAd; // Restaura el estado de silencio
+            });
         }
     } catch (error) {
         console.warn("⚠️ SDK de CrazyGames no se pudo inicializar. Los anuncios y guardado en la nube no funcionarán.", error);
@@ -92,16 +108,21 @@ async function initCrazyGamesSDK() {
 }
 
 function loadAssets() {
-    audioManager.loadSound('explosion', '../explosion-312361.mp3');
-    audioManager.loadSound('shoot', '../cannon-fire-161072.mp3');
+    audioManager.loadSound('explosion', 'explosion-312361.mp3');
+    audioManager.loadSound('shoot', 'space-battle-sounds-br-95277-VEED.mp3');
 }
 
 async function loadHighScore() {
-    // Ahora usamos el SDK si está disponible, si no, localStorage
-    if (crazySDK) {
-        const savedScore = crazySDK.data.getItem("high-score");
-        highScore = savedScore ? Number(savedScore) : 0;
-    } else {
+    try {
+        if (crazySDK && crazySDK.data && typeof crazySDK.data.getItem === 'function') {
+            // getItem puede devolver Promise o valor sincrónico
+            const savedScore = await crazySDK.data.getItem("high-score");
+            highScore = savedScore ? Number(savedScore) : 0;
+        } else {
+            highScore = Number(localStorage.getItem("high-score")) || 0;
+        }
+    } catch (e) {
+        console.warn('Error leyendo high score (fallback a localStorage):', e);
         highScore = Number(localStorage.getItem("high-score")) || 0;
     }
     highScoreElement.innerHTML = `${highScore}`;
@@ -236,13 +257,17 @@ if (muteButton) {
     });
 }
 
-btnMenu.addEventListener('click', () => {
-         audioManager.unlockAudio(); // Desbloquea el audio cuando el jugador presiona "Play"
-        init(); 
-});
+if (btnMenu) {
+    btnMenu.addEventListener('click', () => {
+        audioManager.unlockAudio(); // Desbloquea el audio cuando el jugador presiona "Play"
+        init();
+    });
+}
 async function gameOver() {
     play = false;
-    window.CrazyGames.SDK.game.gameplayStop();
+    if (crazySDK && crazySDK.game && typeof crazySDK.game.gameplayStop === 'function') {
+        try { crazySDK.game.gameplayStop(); } catch(e) { console.warn(e); }
+    }
 
     // Creamos una explosión en la posición de la nave y la ocultamos
     explosions.push(new Explosion(ctx, spritesheet, ship.position, 1.5));
@@ -252,6 +277,7 @@ async function gameOver() {
     // Muestra un anuncio "midgame" si ha pasado suficiente tiempo
     const now = Date.now();
     if (crazySDK && now - lastAdTime > adCooldown) {
+    if (crazySDK && !crazySDK.user.isUserAdFree() && now - lastAdTime > adCooldown) {
         try {
             await crazySDK.ad.requestAd("midgame");
              lastAdTime = now; // Actualiza el tiempo solo si el anuncio se mostró
@@ -270,12 +296,53 @@ async function gameOver() {
         bonusMessage.remove();
     }
     if (rewardButton) {
-        rewardButton.style.display = 'block';
+        rewardButton.style.display = 'flex';
+    }
+
+    showBanner(); // 🔹 Mostrar banner en el menú de Game Over
+}
+
+// --- showBanner simplificado ---
+async function showBanner() {
+    if (!crazySDK) {
+    if (!crazySDK || (crazySDK.user && crazySDK.user.isUserAdFree())) {
+        console.warn('CrazySDK no disponible, no se pide banner.');
+        return;
+    }
+    const slotId = 'banner-slot'; // <- usamos el slot con tamaño exacto
+    const slot = document.getElementById(slotId);
+    if (!slot) {
+        console.warn('No existe el slot de banner:', slotId);
+        return;
+    }
+
+    try {
+        console.log('Requesting banner into slot:', slotId);
+        // La llamada original al SDK
+        // Cambiamos a requestResponsiveBanner, que es el método correcto para un contenedor de tamaño variable.
+        await crazySDK.banner.requestResponsiveBanner(slotId);
+        console.log('Banner mostrado correctamente.');
+    } catch (err) {
+        // Un log de error simple es suficiente ahora que la causa raíz está resuelta.
+        console.error('No se pudo mostrar banner:', err);
+    }
+}
+
+// --- hideBanner con try/catch ---
+async function hideBanner() {
+    if (!crazySDK || !crazySDK.banner) return;
+    try {
+        await crazySDK.banner.clearBanner();
+        console.log('Banner ocultado/limpiado.');
+    } catch (e) {
+        console.warn('Error al ocultar banner:', e);
     }
 }
 function init() {
 
-    window.CrazyGames.SDK.game.gameplayStart();
+    if (crazySDK && crazySDK.game && typeof crazySDK.game.gameplayStart === 'function') {
+        try { crazySDK.game.gameplayStart(); } catch(e) { console.warn(e); }
+    }
 
     score.innerHTML = 0;
     scoreCount = 0;
@@ -288,6 +355,7 @@ function init() {
     projectilesEnemy.length = 0;
     explosions.length = 0;
 
+    // Reiniciamos la nave
     // Reiniciamos la nave
     ship.position = { x: 200, y: 200 };
     ship.projectiles.length = 0;
@@ -324,6 +392,8 @@ function init() {
     menu.style.display = 'none';
     menuStatus = false;
     play = true;
+
+    hideBanner(); // 🔹 Ocultar el banner cuando empieza el juego
 }
 function createStars() {
     
@@ -393,6 +463,33 @@ function collisionObjects(){
         }
     }
 
+    for (let i = 0; i < projectilesEnemy.length; i++) {
+        for (let j = 0; j < asteroids.length; j++) {
+            if (collision(projectilesEnemy[i], asteroids[j])) {
+                // Crear explosión para el asteroide (escala relativa al tamaño del asteroide)
+                explosions.push(new Explosion(ctx, spritesheet, asteroids[j].position, asteroids[j].scale * 2.5));
+                audioManager.playSound('explosion', 0.6); // Sonido aún más bajo
+                asteroids.splice(j, 1);
+                projectilesEnemy.splice(i, 1);
+                i--;
+                break; // Salir del bucle de asteroides
+            }
+        }
+    }
+
+    for (let i = 0; i < projectilesEnemy.length; i++) {
+        for (let j = 0; j < ship.projectiles.length; j++) {
+            if (collision(projectilesEnemy[i], ship.projectiles[j])) {
+                // Crear explosión para el proyectil (escala relativa al tamaño del proyectil)
+                explosions.push(new Explosion(ctx, spritesheet, ship.projectiles[j].position, ship.projectiles[j].scale * 2.5));
+                audioManager.playSound('explosion', 0.6); // Sonido aún más bajo
+                projectilesEnemy.splice(i, 1);
+                i--;
+                break; // Salir del bucle de proyectiles
+            }
+        }
+    }
+
     // Colisiones de proyectiles del jugador
     for (let i = ship.projectiles.length - 1; i >= 0; i--) {
         let projectileDestroyed = false;
@@ -446,17 +543,22 @@ function collisionObjects(){
     if (scoreCount > highScore) {
         highScore = scoreCount;
         highScoreElement.innerHTML = `${highScore}`;
-        if (crazySDK) {
-            crazySDK.data.setItem("high-score", highScore);
+        // Guardar la puntuación no debe bloquear el bucle del juego.
+        // Usamos .catch() para manejar errores en lugar de await en una función no asíncrona.
+        if (crazySDK && crazySDK.data && typeof crazySDK.data.setItem === 'function') {
+            crazySDK.data.setItem("high-score", highScore)
+                .catch(e => console.warn('Error guardando high-score con SDK:', e));
         } else {
-            localStorage.setItem("high-score", highScore); // Guardado local como fallback
+            try {
+                localStorage.setItem("high-score", highScore);
+            } catch(e) { console.warn('Error guardando high-score con localStorage:', e); }
         }
     }
 }
 function generateAsteroids() {
     asteroidInterval = setInterval(() => {
         let type = Math.floor(Math.random() * (2)) + 1;  // Genera un tipo aleatorio (1 o 2)
-        let asteroid = new Asteroid(ctx, spritesheet,{x:0,y:0}, type);
+        let asteroid = new Asteroid(ctx, spritesheet, {x:0,y:0}, type);
         asteroid.generatePosition(canvas);  // Posiciona el asteroide en el canvas
         asteroids.push(asteroid);
         setTimeout(() => {
@@ -509,6 +611,11 @@ function updateObjects(){
 }
 
 function update() {
+    // 🔹 Requisito SDK: Pausar el juego si se muestra un anuncio.
+    if (isAdPlaying) {
+        requestAnimationFrame(update);
+        return; // No ejecutar ninguna lógica del juego
+    }
 
     if(menuStatus){
         background();
@@ -534,13 +641,33 @@ function update() {
     requestAnimationFrame(update);
 }
 
+let bannerResizeTimeout = null;
+window.addEventListener('resize', () => {
+    if (bannerResizeTimeout) clearTimeout(bannerResizeTimeout);
+    bannerResizeTimeout = setTimeout(() => {
+        // Si el menú está abierto, actualizamos / reintentamos mostrar banner
+        if (menuStatus) {
+            // limpiar y pedir de nuevo
+            hideBanner().finally(() => showBanner());
+        }
+    }, 300);
+});
+
 // Función principal asíncrona para controlar el arranque
 async function main() {
+    resizeCanvas();
     await initCrazyGamesSDK(); // 1. Inicializar SDK
     await loadHighScore();     // 2. Cargar puntuación (puede usar el SDK)
     loadAssets();              // 3. Cargar assets
     createStars();             // 4. Crear elementos visuales
     update();                  // 5. Iniciar el bucle del juego
+
+    setTimeout(() => {
+        // Mostrar banner solo si el menú está visible (no en gameplay)
+        if (menuStatus) {
+            showBanner();
+        }
+    }, 600);
 }
 
 main(); // Iniciar el juego

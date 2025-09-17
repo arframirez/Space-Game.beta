@@ -44,4 +44,4 @@ export class AudioManager {
         // El método .play() devuelve una promesa. La capturamos para evitar errores en la consola.
         soundToPlay.play().catch(e => console.warn(`No se pudo reproducir el sonido: ${name}. Es posible que se necesite interacción del usuario.`, e));
     }
-}
+ }

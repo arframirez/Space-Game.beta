@@ -177,7 +177,28 @@ h2{
     background: transparent;
     touch-action: none; /* Evita gestos del navegador como zoom */
 }
+/* Contenedor del botón de recompensa */
+.ad{
+    /* Lo hacemos parte del layout flex del menú */
+    align-self: center; /* Se centra horizontalmente */
+    margin-top: 20px;   /* Espacio respecto al botón de Play */
+}
 
+/* Estilo del botón de recompensa */
+.play-game2{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #444;
+    padding: 10px 15px; /* Añadimos padding para que no se vea apretado */
+    max-width: 220px;   /* Un ancho máximo para que no sea demasiado grande */
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.play-game2:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
 /* Media queries para móviles */
 @media (max-width: 768px) {
     html, body {
@@ -190,7 +211,7 @@ h2{
         left: 0;
         overflow: hidden;
     }
-    
+
     .game {
         width: 100vw;
         height: 100vh;
@@ -234,28 +255,16 @@ h2{
     }
     
     h2 {
-        font-size: 8vw; /* Responsive font size */
+        font-size: 8vw;
     }
     
     .menu ion-icon {
         font-size: 8vw;
     }
     
-    /* Ajustar joystick para móviles portrait */
-    #joystick-zone {
-        width: 40% !important;
-        height: 50% !important;
-        bottom: 0px !important;
-        left: 0px !important;
-        overflow: hidden !important;
-        max-width: calc(100vw - 20px) !important;
-        max-height: calc(100vh - 20px) !important;
-    }
-    
-    /* Ajustar botón para móviles portrait */
     .button {
-        width: 150px !important;
-        height: 150px !important;
+        width: 100px !important;
+        height: 100px !important;
         bottom: 20px !important;
         right: 20px !important;
     }
@@ -282,20 +291,18 @@ h2{
     }
 }
 
-/* 🔄 Orientación horizontal para móviles */
+
 @media screen and (orientation: landscape) and (max-height: 768px) {
-    /* Ajustar joystick para landscape - Área más amplia */
     #joystick-zone {
-        width: 50% !important;
-        height: 90% !important;
+        width: 40% !important;
+        height: 100% !important;
         bottom: 0px !important;
         left: 0px !important;
         overflow: visible !important;
         max-width: none !important;
         max-height: none !important;
     }
-    
-    /* Ajustar botón para landscape */
+
     .button {
         width: 100px !important;
         height: 100px !important;
@@ -307,7 +314,7 @@ h2{
         font-size: 40px !important;
     }
     
-    /* Ajustar HUD para landscape */
+
     #hud {
         font-size: 14px !important;
         left: 50% !important;
@@ -327,8 +334,7 @@ h2{
         left: 30% !important;
         top: 5px !important;
     }
-    
-    /* Menú responsive en landscape */
+
     h2 {
         font-size: 6vw !important;
         margin-bottom: 15px !important;
