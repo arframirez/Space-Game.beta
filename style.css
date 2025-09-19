@@ -8,13 +8,12 @@
 }
 
 body{
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
       font-family: "Bitcount Grid Double", system-ui;
       font-weight: 400;
       background-color: #242739;
-      display: flex;
-      justify-content: center;
-      align-items: center;
       -webkit-user-select: none; /* 📱 Evita selección de texto */
       -moz-user-select: none;
       -webkit-tap-highlight-color: transparent; /* Quita el flash azul en iOS */
@@ -26,6 +25,11 @@ body{
 .game{
       position: relative;
       color: white;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
 }
 .menu{
       position: absolute;
@@ -201,17 +205,6 @@ h2{
 }
 /* Media queries para móviles */
 @media (max-width: 768px) {
-    html, body {
-        padding: 0;
-        margin: 0;
-        position: fixed;
-        width: 100%;
-        height: 100%;
-        top: 0;
-        left: 0;
-        overflow: hidden;
-    }
-
     .game {
         width: 100vw;
         height: 100vh;
@@ -261,7 +254,7 @@ h2{
     .menu ion-icon {
         font-size: 8vw;
     }
-    
+ 
     .button {
         width: 100px !important;
         height: 100px !important;
@@ -313,7 +306,6 @@ h2{
     .button ion-icon {
         font-size: 40px !important;
     }
-    
 
     #hud {
         font-size: 14px !important;
@@ -343,5 +335,169 @@ h2{
     .menu ion-icon {
         font-size: 6vw !important;
         margin-bottom: 15px !important;
+    }
+}
+
+/* --- Banner Slot Styling --- */
+
+/* Desktop */
+#banner-slot { width: 728px; height: 90px; }
+
+/* Tablet / narrow desktop fallback */
+@media (max-width: 1024px) {
+  #banner-slot { width: 300px; height: 250px; }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  #banner-slot { width: 320px; height: 50px; }
+}
+
+/* opcional: ocultar visual placeholder mientras no haya banner real */
+#banner-slot { background: transparent; pointer-events: auto; }
+
+#loading-screen {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-color: #111111; /* Mismo color que el fondo del juego */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    color: white;
+    font-size: 24px;
+}
+
+/* Estilos para la información del usuario en el HUD */
+.hud-text {
+    position: absolute;
+    font-size: 14px;
+    opacity: 0.7;
+    color: white;
+    z-index: 1001;
+    display: none; /* Oculto por defecto */
+}
+
+#user-info {
+    top: 15px;
+    right: 60px; /* Al lado del botón de mute */
+    text-align: right;
+}
+
+/* Ajustes para móviles */
+@media (max-width: 768px) {
+    #user-info {
+        font-size: 12px;
+        top: 18px;
+        right: 60px;
+        max-width: 100px; /* Evita que se desborde */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+/* --- Animación de Pantalla de Carga --- */
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: space 3.5s infinite alternate;
+    position: relative;
+}
+
+.planet {
+    margin: 0 20px;
+    width: 100px;
+    height: 100px;
+    animation: rotate 20s linear infinite;
+}
+
+.nave {
+    position: absolute;
+    width: 50px;
+    z-index: 10;
+    bottom: 0;
+    left: 0;
+    transition: all;
+    animation: moveNave 5s infinite alternate;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes moveNave {
+    0% {
+        transform: scale(0.3);
+    }
+    10% {
+        bottom: 17px;
+        left: 19px;
+        transform: scale(0.5);
+    }
+    20% {
+        bottom: 36px;
+        left: 38px;
+        transform: scale(0.7);
+    }
+    30% {
+        bottom: 49px;
+        left: 53px;
+        transform: scale(0.8);
+    }
+    40% {
+        bottom: 60px;
+        left: 66px;
+        transform: scale(0.9);
+    }
+    50% {
+        bottom: 75px;
+        left: 90px;
+        transform: scale(1);
+    }
+    60% {
+        bottom: 52px;
+        left: 52px;
+        transform: scale(0.8);
+    }
+    70% {
+        bottom: 39px;
+        left: 39px;
+        transform: scale(0.7);
+    }
+    80% {
+        bottom: 26px;
+        left: 26px;
+        transform: scale(0.5);
+    }
+    90% {
+        z-index: -1;
+        bottom: 13px;
+        left: 13px;
+        transform: scale(0.4);
+    }
+    100% {
+        z-index: -1;
+        bottom: 0px;
+        left: 0px;
+        transform: scale(0.3);
+    }
+}
+
+@keyframes space {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(-20px);
     }
 }

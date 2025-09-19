@@ -58,6 +58,11 @@
         <span class="score">0</span>
     </span>
     <!-- Botón de Silencio -->
+    <div id="user-info" class="hud-text">
+        Player: <span id="username-display"></span>
+    </div>
+
+
     <div id="mute-button" class="hud-button">
         <ion-icon name="volume-high-outline"></ion-icon>
     </div>
@@ -75,10 +80,22 @@
         </div>
         </div>
     </div>
+
+    <div id="loading-screen">
+        <div class="container">
+            <img class="nave" src="cohete.png" alt="nave">
+            <img class="planet" src="neptuno.png" alt="planeta">
+        </div>
     </div>
 
+    </div>
 
-
+    <!-- Outer container (responsive, centrado). Dentro hay un slot con tamaño exacto -->
+    <div id="banner-container"
+         style="position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:flex-end;z-index:2000;pointer-events:auto;">
+      <!-- ESTE es el ID que pasaremos al SDK: banner-slot -->
+      <div id="banner-slot" style="width:728px; height:90px;"></div>
+    </div>
 
 
     <img hidden id="spritesheet" src="spaceShooter2_spritesheet.png" alt="spritesheet">
@@ -86,6 +103,24 @@
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
     <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+    <script>
+        // --- SITELOCK ---
+        // This code runs immediately to protect the game from being stolen.
+        (function() {
+            try {
+                const allowedHostnames = [".crazygames.com", "localhost", "127.0.0.1"];
+                const currentHostname = window.location.hostname;
+                const isAllowed = allowedHostnames.some(h => currentHostname.endsWith(h) || currentHostname === h);
+
+                if (!isAllowed) {
+                    document.body.innerHTML = `<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:#111;color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;font-family:sans-serif;text-align:center;padding:1em;"><h1 style="font-size:3em;margin-bottom:20px;">Astro Blaze</h1><p style="font-size:1.2em;margin-bottom:30px;">This game is only available on CrazyGames.com</p><a href="https://www.crazygames.com" target="_blank" style="color:#0f8;text-decoration:none;font-size:1.5em;border:1px solid #0f8;padding:10px 20px;border-radius:5px;">Play on CrazyGames</a></div>`;
+                    throw new Error("Sitelock: Unauthorized domain.");
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        })();
+    </script>
     <script src="scripts/script.js" type="module"></script>
    
 </body>

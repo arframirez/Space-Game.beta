@@ -161,7 +161,7 @@ move() {
     if (this.cooldownTimer) return;
 
     this.cooldownTimer = setInterval(() => {
-        this.hudCooldown.textContent = `Bloqueado: ${remaining}s`;
+        this.hudCooldown.textContent = `Blocked: ${remaining}s`;
         remaining--;
 
         // Cuando el tiempo termina, desbloqueamos disparos
@@ -178,7 +178,7 @@ move() {
     // Si se está regenerando, mostramos progreso
     else if (this.recharging && this.availableShots < this.maxShots) {
         this.hudCooldown.textContent = "";
-        this.hudRecharge.textContent = "Regenerando disparos...";
+        this.hudRecharge.textContent = "Recharging...";
     } 
     // Si todo está lleno, ocultamos mensajes
     else {

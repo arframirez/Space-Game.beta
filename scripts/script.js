@@ -18,6 +18,7 @@ const score = document.querySelector('.score');
 const rewardButton = document.getElementById('reward-button');
 const muteButton = document.getElementById('mute-button');
 const btnMenu = document.querySelector('.play-game');
+const loadingScreen = document.getElementById('loading-screen');
 const muteIcon = muteButton ? muteButton.querySelector('ion-icon') : null;
 
 const highScoreElement = document.querySelector('.high-score');
@@ -53,9 +54,10 @@ window.addEventListener('orientationchange', () => {
 let hitBox = false;
 let menuStatus = true
 let play = false
-let hasBonus = false;
-let isAdPlaying = false; // 🔹 Nuevo: Estado para saber si un anuncio se está mostrando
-let wasMutedBeforeAd = false; // 🔹 Nuevo: Guarda el estado de silencio antes de un anuncio
+let hasBonus = false; // Flag for the rewarded ad bonus
+let isPausedByVisibility = false; // State to pause when tab is not visible
+let isAdPlaying = false; // State to track if an ad is currently playing
+let wasMutedBeforeAd = false; // Saves the mute state before an ad
 let lastAdTime = 0;
 const adCooldown = 120000; // 2 minutos en milisegundos
 
@@ -74,6 +76,31 @@ let highScore = 0;
 let asteroidInterval = null;
 let enemyInterval = null;
 
+// --- COMMON SDK SOLUTIONS & BROWSER FIXES ---
+
+// Disable unwanted page scroll on mouse wheel.
+window.addEventListener("wheel", (event) => event.preventDefault(), {
+    passive: false,
+});
+
+// Disable unwanted key events (scrolling with arrows/space).
+window.addEventListener("keydown", (event) => {
+    if (["ArrowUp", "ArrowDown", " "].includes(event.key)) {
+        event.preventDefault();
+    }
+});
+
+// Disable context menu on right-click.
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+
+// Pause game when tab is not visible
+document.addEventListener("visibilitychange", () => {
+    isPausedByVisibility = document.visibilityState === "hidden";
+    console.log(`Game ${isPausedByVisibility ? 'paused' : 'resumed'} due to visibility change.`);
+});
+
+// --- END OF FIXES ---
+
 let crazySDK = null;
 
 // Función para inicializar el SDK de CrazyGames
@@ -82,31 +109,66 @@ async function initCrazyGamesSDK() {
         if (window.CrazyGames && window.CrazyGames.SDK) {
             await window.CrazyGames.SDK.init();
             crazySDK = window.CrazyGames.SDK;
-            console.log("✅ SDK de CrazyGames inicializado.");
+            console.log("✅ CrazyGames SDK initialized.");
 
             // Escuchar eventos de anuncios para depuración
             crazySDK.addEventListener("adStarted", () => {
-                console.log("Anuncio iniciado, pausando el juego.");
+                console.log("Ad started, pausing game.");
                 isAdPlaying = true;
                 wasMutedBeforeAd = audioManager.isMuted;
-                audioManager.isMuted = true; // Silencia el juego durante el anuncio
+                audioManager.isMuted = true; // Mute the game during the ad
             });
             crazySDK.addEventListener("adFinished", () => {
-                console.log("Anuncio finalizado, reanudando el juego.");
+                console.log("Ad finished, resuming game.");
                 isAdPlaying = false;
-                audioManager.isMuted = wasMutedBeforeAd; // Restaura el estado de silencio
+                audioManager.isMuted = wasMutedBeforeAd; // Restore mute state
             });
             crazySDK.addEventListener("adError", (error) => {
-                console.log("Error en anuncio, reanudando el juego:", error);
+                console.log("Ad error, resuming game:", error);
                 isAdPlaying = false;
-                audioManager.isMuted = wasMutedBeforeAd; // Restaura el estado de silencio
+                audioManager.isMuted = wasMutedBeforeAd; // Restore mute state
+            });
+
+            // Listen for the site's mute button from CrazyGames
+            crazySDK.addEventListener("mute", () => {
+                console.log("Mute event received from SDK.");
+                audioManager.isMuted = true;
+                if (muteIcon) muteIcon.name = 'volume-mute-outline';
+            });
+
+            crazySDK.addEventListener("unmute", () => {
+                console.log("Unmute event received from SDK.");
+                audioManager.isMuted = false;
+                if (muteIcon) muteIcon.name = 'volume-high-outline';
             });
         }
     } catch (error) {
         console.warn("⚠️ SDK de CrazyGames no se pudo inicializar. Los anuncios y guardado en la nube no funcionarán.", error);
     }
-}
+    }
 
+
+// Function to display username if logged in
+function displayUsername() {
+    if (!crazySDK || !crazySDK.user || !crazySDK.user.isUserAccountAvailable) {
+        return;
+    }
+
+    try {
+        const username = crazySDK.user.username;
+        if (username) {
+            console.log(`User logged in: ${username}`);
+            const userInfoContainer = document.getElementById('user-info');
+            const usernameDisplay = document.getElementById('username-display');
+            if (userInfoContainer && usernameDisplay) {
+                usernameDisplay.textContent = username;
+                userInfoContainer.style.display = 'block'; // Hacerlo visible
+            }
+        }
+    } catch (e) {
+        console.warn("An error occurred while trying to get the username.", e);
+    }
+}
 function loadAssets() {
     audioManager.loadSound('explosion', 'explosion-312361.mp3');
     audioManager.loadSound('shoot', 'space-battle-sounds-br-95277-VEED.mp3');
@@ -122,7 +184,7 @@ async function loadHighScore() {
             highScore = Number(localStorage.getItem("high-score")) || 0;
         }
     } catch (e) {
-        console.warn('Error leyendo high score (fallback a localStorage):', e);
+        console.warn('Error reading high score (falling back to localStorage):', e);
         highScore = Number(localStorage.getItem("high-score")) || 0;
     }
     highScoreElement.innerHTML = `${highScore}`;
@@ -259,7 +321,13 @@ if (muteButton) {
 
 if (btnMenu) {
     btnMenu.addEventListener('click', () => {
-        audioManager.unlockAudio(); // Desbloquea el audio cuando el jugador presiona "Play"
+        audioManager.unlockAudio(); // Desbloquea el audio
+
+        // Request user login before starting the game
+        if (crazySDK && crazySDK.user && !crazySDK.user.isUserAccountAvailable) {
+            crazySDK.user.requestUserAccount().catch(e => console.warn("Login popup closed or failed", e));
+        }
+
         init();
     });
 }
@@ -277,7 +345,6 @@ async function gameOver() {
     // Muestra un anuncio "midgame" si ha pasado suficiente tiempo
     const now = Date.now();
     if (crazySDK && now - lastAdTime > adCooldown) {
-    if (crazySDK && !crazySDK.user.isUserAdFree() && now - lastAdTime > adCooldown) {
         try {
             await crazySDK.ad.requestAd("midgame");
              lastAdTime = now; // Actualiza el tiempo solo si el anuncio se mostró
@@ -299,16 +366,20 @@ async function gameOver() {
         rewardButton.style.display = 'flex';
     }
 
-    showBanner(); // 🔹 Mostrar banner en el menú de Game Over
+    showBanner(); // Show banner in the Game Over menu
 }
 
 // --- showBanner simplificado ---
 async function showBanner() {
     if (!crazySDK) {
-    if (!crazySDK || (crazySDK.user && crazySDK.user.isUserAdFree())) {
         console.warn('CrazySDK no disponible, no se pide banner.');
         return;
     }
+    const container = document.getElementById('banner-container');
+    if (container) {
+        container.style.display = 'flex';
+    }
+
     const slotId = 'banner-slot'; // <- usamos el slot con tamaño exacto
     const slot = document.getElementById(slotId);
     if (!slot) {
@@ -330,6 +401,11 @@ async function showBanner() {
 
 // --- hideBanner con try/catch ---
 async function hideBanner() {
+    const container = document.getElementById('banner-container');
+    if (container) {
+        container.style.display = 'none';
+    }
+
     if (!crazySDK || !crazySDK.banner) return;
     try {
         await crazySDK.banner.clearBanner();
@@ -362,26 +438,26 @@ function init() {
     ship.speed = 0;
     ship.angle = 0;
 
-    // 🔹 Aplicar bonus si está activo
+    // Apply bonus if active
     if (hasBonus) {
-        ship.maxShots = 15; // El original es 10
-        hasBonus = false; // Usar el bonus solo una vez
+        ship.maxShots = 15; // Original is 10
+        hasBonus = false; // Use the bonus only once
     } else {
-        ship.maxShots = 10; // Valor por defecto
+        ship.maxShots = 10; // Default value
     }
 
-            // 🔹 Reiniciamos limitador de disparos y bloqueo
-    ship.availableShots = ship.maxShots;  // Restaura todos los disparos disponibles
-    ship.blocked = false;                 // Desbloqueamos disparos
-    ship.recharging = false;              // Detenemos recarga automática 
-    // Si usas un intervalo de recarga, mejor lo reiniciamos aquí también
+    // Reset shot limiter and block
+    ship.availableShots = ship.maxShots;  // Restore all available shots
+    ship.blocked = false;                 // Unblock shooting
+    ship.recharging = false;              // Stop automatic recharge
+    // If you use a recharge interval, it's best to reset it here too
     clearInterval(ship.rechargeInterval);
     if (ship.rechargeInterval) {
         clearInterval(ship.rechargeInterval);
         ship.rechargeInterval = null;
     }
 
-    // 🔹 Limpiamos los intervalos anteriores para evitar duplicados
+    // Clear previous intervals to avoid duplicates
     if (asteroidInterval) clearInterval(asteroidInterval);
     if (enemyInterval) clearInterval(enemyInterval);
 
@@ -393,7 +469,7 @@ function init() {
     menuStatus = false;
     play = true;
 
-    hideBanner(); // 🔹 Ocultar el banner cuando empieza el juego
+    hideBanner(); // Hide the banner when the game starts
 }
 function createStars() {
     
@@ -543,10 +619,16 @@ function collisionObjects(){
     if (scoreCount > highScore) {
         highScore = scoreCount;
         highScoreElement.innerHTML = `${highScore}`;
-        // Guardar la puntuación no debe bloquear el bucle del juego.
+
+        // Congratulations! Call happytime() to notify a happy moment in the game.
+        if (crazySDK && crazySDK.game) {
+            try { crazySDK.game.happytime(); } catch(e) { console.warn(e); }
+        }
+
+        // Saving the score should not block the game loop.
         // Usamos .catch() para manejar errores en lugar de await en una función no asíncrona.
         if (crazySDK && crazySDK.data && typeof crazySDK.data.setItem === 'function') {
-            crazySDK.data.setItem("high-score", highScore)
+            Promise.resolve(crazySDK.data.setItem("high-score", highScore))
                 .catch(e => console.warn('Error guardando high-score con SDK:', e));
         } else {
             try {
@@ -611,8 +693,8 @@ function updateObjects(){
 }
 
 function update() {
-    // 🔹 Requisito SDK: Pausar el juego si se muestra un anuncio.
-    if (isAdPlaying) {
+    // SDK Requirement: Pause the game if an ad is playing or tab is hidden.
+    if (isAdPlaying || isPausedByVisibility) {
         requestAnimationFrame(update);
         return; // No ejecutar ninguna lógica del juego
     }
@@ -655,19 +737,36 @@ window.addEventListener('resize', () => {
 
 // Función principal asíncrona para controlar el arranque
 async function main() {
-    resizeCanvas();
-    await initCrazyGamesSDK(); // 1. Inicializar SDK
-    await loadHighScore();     // 2. Cargar puntuación (puede usar el SDK)
-    loadAssets();              // 3. Cargar assets
-    createStars();             // 4. Crear elementos visuales
-    update();                  // 5. Iniciar el bucle del juego
+    // 1. Mostrar la pantalla de carga inmediatamente
+    if (loadingScreen) loadingScreen.style.display = 'flex';
 
-    setTimeout(() => {
-        // Mostrar banner solo si el menú está visible (no en gameplay)
-        if (menuStatus) {
-            showBanner();
-        }
-    }, 600);
+    resizeCanvas();
+    await initCrazyGamesSDK(); // 2. Inicializar SDK
+
+    // 3. Notificar al SDK que la carga ha comenzado
+    if (crazySDK && crazySDK.game) {
+        try { crazySDK.game.loadingStart(); } catch(e) { console.warn(e); }
+    }
+
+    // 4. Cargar todos los datos y assets del juego
+    await loadHighScore();
+    displayUsername();
+    loadAssets();
+    createStars();
+
+    // 5. Iniciar el bucle del juego
+    update();
+
+    // 6. Notificar al SDK que la carga ha terminado y ocultar la pantalla
+    if (crazySDK && crazySDK.game) {
+        try { crazySDK.game.loadingStop(); } catch(e) { console.warn(e); }
+    }
+    if (loadingScreen) loadingScreen.style.display = 'none';
+
+    // 7. Mostrar el banner inicial si estamos en el menú
+    if (menuStatus) {
+        showBanner();
+    }
 }
 
 main(); // Iniciar el juego
