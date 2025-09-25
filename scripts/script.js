@@ -4,6 +4,7 @@ import { Label } from "./label.js";
 import { Enemy } from "./enemy.js";
 import { Star } from "./star.js";
 import { Explosion } from "./explosion.js";
+import { Boss } from "./boss.js";
 import { AudioManager } from "./AudioManager.js";
 
 
@@ -61,6 +62,26 @@ let wasMutedBeforeAd = false; // Saves the mute state before an ad
 let lastAdTime = 0;
 const adCooldown = 120000; // 2 minutos en milisegundos
 
+// --- Variables de Dificultad Progresiva ---
+let currentDifficultyLevel = 0;
+const difficultyThresholds = [100, 300, 600, 1000, 1500, 2000, 2500, 3000, 4000, 5000]; // Puntos para aumentar dificultad
+
+// Valores iniciales de dificultad
+let currentAsteroidSpawnInterval = 500; // ms
+let currentEnemySpawnInterval = 7000; // ms
+let currentEnemySpeed = 2;
+let currentAsteroidMinSpeed = 2;
+let currentAsteroidMaxSpeed = 3;
+
+let lastAsteroidSpawnTime = 0;
+let lastEnemySpawnTime = 0;
+
+// --- Variables del Jefe (Boss) ---
+let boss = null;
+let bossActive = false;
+const bossSpawnThresholds = [300, 1000, 1800, 2600]; // Puntuaciones para que aparezca el jefe
+let currentBossLevel = 0; // Nivel actual del jefe (0, 1, 2, ...)
+
 let scoreCount = 0;
 
 
@@ -91,7 +112,7 @@ window.addEventListener("keydown", (event) => {
 });
 
 // Disable context menu on right-click.
-document.addEventListener("contextmenu", (event) => event.preventDefault());
+// document.addEventListener("contextmenu", (event) => event.preventDefault());
 
 // Pause game when tab is not visible
 document.addEventListener("visibilitychange", () => {
@@ -113,20 +134,14 @@ async function initCrazyGamesSDK() {
 
             // Escuchar eventos de anuncios para depuración
             crazySDK.addEventListener("adStarted", () => {
-                console.log("Ad started, pausing game.");
+                console.log("Ad started, pausing and muting game via SDK.");
                 isAdPlaying = true;
-                wasMutedBeforeAd = audioManager.isMuted;
-                audioManager.isMuted = true; // Mute the game during the ad
+                crazySDK.game.setVolume(0); // ✅ La forma más segura de silenciar
             });
             crazySDK.addEventListener("adFinished", () => {
-                console.log("Ad finished, resuming game.");
+                console.log("Ad finished, resuming and unmuting game via SDK.");
                 isAdPlaying = false;
-                audioManager.isMuted = wasMutedBeforeAd; // Restore mute state
-            });
-            crazySDK.addEventListener("adError", (error) => {
-                console.log("Ad error, resuming game:", error);
-                isAdPlaying = false;
-                audioManager.isMuted = wasMutedBeforeAd; // Restore mute state
+                crazySDK.game.setVolume(1); // ✅ Restauramos el volumen
             });
 
             // Listen for the site's mute button from CrazyGames
@@ -358,6 +373,7 @@ async function gameOver() {
     menuStatus = true;
 
     // Restaura el botón de recompensa para la siguiente sesión
+    hasBonus = false; // Asegurarse de que el bonus se reinicie
     const bonusMessage = document.getElementById('bonus-message');
     if (bonusMessage) {
         bonusMessage.remove();
@@ -432,7 +448,6 @@ function init() {
     explosions.length = 0;
 
     // Reiniciamos la nave
-    // Reiniciamos la nave
     ship.position = { x: 200, y: 200 };
     ship.projectiles.length = 0;
     ship.speed = 0;
@@ -449,22 +464,35 @@ function init() {
     // Reset shot limiter and block
     ship.availableShots = ship.maxShots;  // Restore all available shots
     ship.blocked = false;                 // Unblock shooting
-    ship.recharging = false;              // Stop automatic recharge
-    // If you use a recharge interval, it's best to reset it here too
-    clearInterval(ship.rechargeInterval);
-    if (ship.rechargeInterval) {
-        clearInterval(ship.rechargeInterval);
-        ship.rechargeInterval = null;
+    ship.recharging = false;              // Stop automatic recharge    
+    // 🔹 Limpiar el temporizador de bloqueo para evitar que se quede activo entre partidas
+    // Reiniciar variables del jefe
+    boss = null;
+    bossActive = false; // ✅ Reinicia el estado del jefe para la nueva partida
+    currentBossLevel = 0;
+
+    if (ship.cooldownTimer) {
+        clearInterval(ship.cooldownTimer);
+        ship.cooldownTimer = null;
     }
 
     // Clear previous intervals to avoid duplicates
-    if (asteroidInterval) clearInterval(asteroidInterval);
-    if (enemyInterval) clearInterval(enemyInterval);
+    // Eliminamos los setInterval ya que ahora gestionaremos el spawn en el bucle update
+    // if (asteroidInterval) clearInterval(asteroidInterval);
+    // if (enemyInterval) clearInterval(enemyInterval);
 
-    // 🔹 Reiniciamos la generación de objetos
-    generateAsteroids();
-    generateEnemies();
+    // Reiniciar variables de dificultad
+    currentDifficultyLevel = 0;
+    currentAsteroidSpawnInterval = 500;
+    currentEnemySpawnInterval = 7000;
+    currentEnemySpeed = 2;
+    currentAsteroidMinSpeed = 2;
+    currentAsteroidMaxSpeed = 3;
+    // if (asteroidInterval) clearInterval(asteroidInterval); // Ya no se usan, se pueden eliminar
+    // if (enemyInterval) clearInterval(enemyInterval); // Ya no se usan, se pueden eliminar
 
+    lastAsteroidSpawnTime = Date.now(); // Inicializar tiempos de spawn
+    lastEnemySpawnTime = Date.now();
     menu.style.display = 'none';
     menuStatus = false;
     play = true;
@@ -482,32 +510,56 @@ function createStars() {
         stars.push(star);
     }
 }
-function generateEnemies() {
-    enemyInterval = setInterval(() => {
-        let enemy = new Enemy(ctx, spritesheet, canvas, ship);
-        enemy.generatePosition(canvas);
-        enemies.push(enemy);
-        setTimeout(() => {
-            enemy.death = true;
-        }, 3000);
-    }, 7000);
+
+// Funciones para generar un solo asteroide/enemigo, usadas en el bucle update
+function spawnSingleAsteroid() {
+    let type = Math.floor(Math.random() * (2)) + 1;
+    let asteroid = new Asteroid(ctx, spritesheet, {x:0,y:0}, type, currentAsteroidMinSpeed, currentAsteroidMaxSpeed);
+    asteroid.generatePosition(canvas);
+    asteroids.push(asteroid);
+    setTimeout(() => {
+        asteroid.death = true;
+    }, 5000);
 }
 
-function collision(Object1, Object2) {
-    let v1 = Object1.position
-    let v2 = Object2.position;
+function spawnSingleEnemy() {
+    let enemy = new Enemy(ctx, spritesheet, canvas, ship, currentEnemySpeed);
+    enemy.generatePosition(canvas);
+    enemies.push(enemy);
+    setTimeout(() => {
+        enemy.death = true;
+    }, 7000); // El tiempo de vida del enemigo puede ser más largo
+}
 
+function spawnBoss() {
+    if (bossActive) return; // No generar si ya está activo
+
+    console.log(`¡Aparece el JEFE de nivel ${currentBossLevel}!`);
+    bossActive = true;
+    boss = new Boss(ctx, spritesheet, canvas, ship, currentBossLevel);
+
+    // Limpiar enemigos y asteroides existentes para enfocar la batalla
+    asteroids.length = 0;
+    enemies.length = 0;
+
+    // Podrías tocar una música de jefe aquí
+}
+function collision(Object1, Object2) {
+    // ✅ Comprobación de seguridad: si alguno de los objetos o sus propiedades necesarias no existen, no hay colisión.
+    if (!Object1 || !Object2 || !Object1.position || !Object2.position || !Object1.image || !Object2.image) {
+        return false;
+    }
+
+    const v1 = Object1.position;
+    const v2 = Object2.position;
     let v3 = {
         x: v1.x - v2.x,
         y: v1.y - v2.y
-    }
+    };
 
     let distance = Math.sqrt(v3.x * v3.x + v3.y * v3.y);
 
-    if (distance < Object1.image.radio + Object2.image.radio) {
-        return true;
-    }
-    return false;
+    return distance < Object1.image.radio + Object2.image.radio;
 }
 function createMeteors(position) {
      let count = Math.floor(Math.random() * (5 - 3 + 1)) + 3;
@@ -518,7 +570,8 @@ function createMeteors(position) {
 
      }
 }
-function collisionObjects(){
+
+function collisionObjects() {
     // Colisión de la nave con asteroides y enemigos
     for (let i = asteroids.length - 1; i >= 0; i--) {
         if (collision(ship, asteroids[i])) {
@@ -538,30 +591,55 @@ function collisionObjects(){
             return;
         }
     }
+    // Colisión de la nave con el jefe
+    if (bossActive && boss && collision(ship, boss)) {
+        gameOver();
+    }
 
-    for (let i = 0; i < projectilesEnemy.length; i++) {
-        for (let j = 0; j < asteroids.length; j++) {
+    // Colisiones de proyectiles enemigos
+    for (let i = projectilesEnemy.length - 1; i >= 0; i--) {
+        let projectileDestroyed = false;
+
+        // Con asteroides
+        for (let j = asteroids.length - 1; j >= 0; j--) {
             if (collision(projectilesEnemy[i], asteroids[j])) {
-                // Crear explosión para el asteroide (escala relativa al tamaño del asteroide)
                 explosions.push(new Explosion(ctx, spritesheet, asteroids[j].position, asteroids[j].scale * 2.5));
-                audioManager.playSound('explosion', 0.6); // Sonido aún más bajo
+                audioManager.playSound('explosion', 0.6);
                 asteroids.splice(j, 1);
                 projectilesEnemy.splice(i, 1);
-                i--;
-                break; // Salir del bucle de asteroides
+                projectileDestroyed = true;
+                break;
+            }
+        }
+
+        if (projectileDestroyed) continue; // Si ya chocó con un asteroide, no seguir
+
+        // Con proyectiles del jugador
+        for (let k = ship.projectiles.length - 1; k >= 0; k--) {
+            if (collision(projectilesEnemy[i], ship.projectiles[k])) {
+                // Crear una pequeña explosión en el punto de colisión
+                explosions.push(new Explosion(ctx, spritesheet, projectilesEnemy[i].position, 0.4));
+                projectilesEnemy.splice(i, 1);
+                break; // Salir, ya que el proyectil enemigo fue destruido
             }
         }
     }
 
-    for (let i = 0; i < projectilesEnemy.length; i++) {
-        for (let j = 0; j < ship.projectiles.length; j++) {
-            if (collision(projectilesEnemy[i], ship.projectiles[j])) {
-                // Crear explosión para el proyectil (escala relativa al tamaño del proyectil)
-                explosions.push(new Explosion(ctx, spritesheet, ship.projectiles[j].position, ship.projectiles[j].scale * 2.5));
-                audioManager.playSound('explosion', 0.6); // Sonido aún más bajo
-                projectilesEnemy.splice(i, 1);
-                i--;
-                break; // Salir del bucle de proyectiles
+    // Colisiones con el Jefe
+    if (bossActive && boss) {
+        // Proyectiles del jugador contra el jefe
+        for (let i = ship.projectiles.length - 1; i >= 0; i--) {
+            if (collision(ship.projectiles[i], boss)) {
+                boss.takeDamage(1);
+                explosions.push(new Explosion(ctx, spritesheet, ship.projectiles[i].position, 0.5));
+                ship.projectiles.splice(i, 1);
+
+                let text = new Label(ctx, { ...boss.position }, '-1 HP', '#ff4444', font, fontWeight);
+                labels.push(text);
+
+                if (boss.currentHealth <= 0) {
+                    defeatBoss();
+                }
             }
         }
     }
@@ -573,18 +651,16 @@ function collisionObjects(){
         // Con enemigos
         for (let j = enemies.length - 1; j >= 0; j--) {
             if (collision(ship.projectiles[i], enemies[j])) {
-                let text = new Label(ctx, enemies[j].position, '+20 Score', '#00ff00', font, fontWeight);
-                labels.push(text);
+                labels.push(new Label(ctx, { ...enemies[j].position }, '+20 Score', '#00ff00', font, fontWeight));
                 scoreCount += 20;
 
-                // Crear explosión para el enemigo
                 explosions.push(new Explosion(ctx, spritesheet, enemies[j].position, 1.2));
-                audioManager.playSound('explosion', 0.8); // Sonido un poco más bajo
+                audioManager.playSound('explosion', 0.8);
 
                 enemies.splice(j, 1);
                 ship.projectiles.splice(i, 1);
                 projectileDestroyed = true;
-                break; // Salir del bucle de enemigos, el proyectil ya no existe
+                break; 
             }
         }
 
@@ -593,28 +669,29 @@ function collisionObjects(){
         // Con asteroides
         for (let j = asteroids.length - 1; j >= 0; j--) {
             if (collision(ship.projectiles[i], asteroids[j])) {
-                // Crear explosión para el asteroide (escala relativa al tamaño del asteroide)
                 explosions.push(new Explosion(ctx, spritesheet, asteroids[j].position, asteroids[j].scale * 2.5));
-                audioManager.playSound('explosion', 0.6); // Sonido aún más bajo
+                audioManager.playSound('explosion', 0.6);
 
                 if (asteroids[j].type === 1) {
-                    labels.push(new Label(ctx, asteroids[j].position, '+10 Score', '#ffffff', font, fontWeight));
+                    labels.push(new Label(ctx, { ...asteroids[j].position }, '+10 Score', '#ffffff', font, fontWeight));
                     scoreCount += 10;
                 } else if (asteroids[j].type === 2) {
                     createMeteors(asteroids[j].position);
                 } else {
-                    labels.push(new Label(ctx, asteroids[j].position, '+5 Score', 'red', font, fontWeight));
+                    labels.push(new Label(ctx, { ...asteroids[j].position }, '+5 Score', 'red', font, fontWeight));
                     scoreCount += 5;
                 }
 
                 asteroids.splice(j, 1);
                 ship.projectiles.splice(i, 1);
-                break; // Salir del bucle de asteroides
+                break; 
             }
         }
     }
 
-    // Actualizar puntuación y guardado al final
+    checkBossSpawn(); // Comprobar si debe aparecer el jefe
+    updateDifficulty(); // Llamar a la función de dificultad aquí
+
     score.innerHTML = scoreCount;
     if (scoreCount > highScore) {
         highScore = scoreCount;
@@ -637,18 +714,65 @@ function collisionObjects(){
         }
     }
 }
-function generateAsteroids() {
-    asteroidInterval = setInterval(() => {
-        let type = Math.floor(Math.random() * (2)) + 1;  // Genera un tipo aleatorio (1 o 2)
-        let asteroid = new Asteroid(ctx, spritesheet, {x:0,y:0}, type);
-        asteroid.generatePosition(canvas);  // Posiciona el asteroide en el canvas
-        asteroids.push(asteroid);
-        setTimeout(() => {
-               asteroid.death = true;
-        }, 5000);
-    }, 500);
+
+
+// Función para manejar la derrota del jefe
+function defeatBoss() {
+    if (!boss) return;
+
+    console.log("¡Jefe derrotado!");
+    explosions.push(new Explosion(ctx, spritesheet, boss.position, 4.0)); // Gran explosión
+    audioManager.playSound('explosion', 1.0);
+
+    labels.push(new Label(ctx, { ...boss.position }, '+500 Score!', '#ffcc00', font, fontWeight));
+    scoreCount += 250 + (currentBossLevel * 250); // Más puntos por jefes más difíciles
+
+    boss = null;
+    bossActive = false; // ✅ Reiniciamos el estado para que vuelvan a aparecer enemigos
+    currentBossLevel++; // Avanzamos al siguiente nivel de jefe para el próximo umbral
 }
+
+// Función para actualizar la dificultad del juego
+function updateDifficulty() {
+    if (bossActive) return; // No aumentar dificultad durante la pelea con el jefe
+
+    if (currentDifficultyLevel < difficultyThresholds.length && scoreCount >= difficultyThresholds[currentDifficultyLevel]) {
+        currentDifficultyLevel++;
+        console.log(`¡Dificultad aumentada a nivel ${currentDifficultyLevel}! Score: ${scoreCount}`);
+
+        // Ajustar intervalos de spawn (mínimo 150ms para asteroides, 2000ms para enemigos)
+        currentAsteroidSpawnInterval = Math.max(150, currentAsteroidSpawnInterval * 0.9);
+        currentEnemySpawnInterval = Math.max(2000, currentEnemySpawnInterval * 0.9);
+
+        // Ajustar velocidad de enemigos (máximo 8)
+        currentEnemySpeed = Math.min(8, currentEnemySpeed + 0.5);
+
+        // Ajustar rango de velocidad de asteroides (máximo 5-7)
+        currentAsteroidMinSpeed = Math.min(5, currentAsteroidMinSpeed + 0.3);
+        currentAsteroidMaxSpeed = Math.min(7, currentAsteroidMaxSpeed + 0.5);
+
+        // Asegurarse de que minSpeed no sea mayor que maxSpeed
+        if (currentAsteroidMinSpeed > currentAsteroidMaxSpeed) {
+            currentAsteroidMinSpeed = currentAsteroidMaxSpeed - 0.5;
+        }
+    }
+}
+
+// Comprueba si es hora de que aparezca el jefe
+function checkBossSpawn() {
+    // Si hay un jefe activo, no hacer nada
+    if (bossActive) return;
+    // Si ya hemos superado todos los niveles de jefe, no hacer nada
+    if (currentBossLevel >= bossSpawnThresholds.length) return;
+
+    // Si la puntuación alcanza el umbral del nivel de jefe actual
+    if (scoreCount >= bossSpawnThresholds[currentBossLevel]) {
+        spawnBoss();
+    }
+}
+
 function background() {
+    // Actualiza el fondo y las estrellas
     ctx.fillStyle = ' #111111ff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     stars.forEach(star => {
@@ -657,8 +781,24 @@ function background() {
 }
 function updateObjects(){
     // Solo actualizamos la nave si el juego está activo para que se congele al morir
+    ship.update(hitBox);
 
-         ship.update(hitBox);
+    // Gestión de spawn de asteroides y enemigos basada en el tiempo y dificultad
+    // Se detiene si el jefe está activo
+    if (!bossActive) {
+        const now = Date.now();
+        if (now - lastAsteroidSpawnTime > currentAsteroidSpawnInterval) {
+            spawnSingleAsteroid();
+            lastAsteroidSpawnTime = now;
+        }
+        if (now - lastEnemySpawnTime > currentEnemySpawnInterval) {
+            spawnSingleEnemy();
+            lastEnemySpawnTime = now;
+        }
+    } else if (boss) {
+        // Si el jefe está activo, actualízalo
+        boss.update(projectilesEnemy);
+    }
 
     asteroids.forEach((asteroid, i) => {
         asteroid.update(hitBox);

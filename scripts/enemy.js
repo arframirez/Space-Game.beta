@@ -3,7 +3,7 @@ import { Projectile } from "./projectile.js";
 
 
 export class Enemy {
-    constructor(ctx,spritesheet,canvas,ship) {
+    constructor(ctx,spritesheet,canvas,ship, initialSpeed = 2) {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
         this.position = {x: 500, y: 200};
@@ -18,7 +18,7 @@ export class Enemy {
         
         this.image = new Object(spritesheet, {x: 662, y: -1}, 94, 148, 0.4 * mobileScale);
         this.imageParts = new Object(spritesheet, {x: 992, y: 564}, 37, 72, 0.54 * mobileScale);
-        this.speed = 2;
+        this.speed = initialSpeed; // Usamos la velocidad inicial pasada
         this.death = false;
     }
         draw() {

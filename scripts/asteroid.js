@@ -1,6 +1,6 @@
 import {Object} from "./object.js";
 export  class Asteroid {
-    constructor(ctx, spritesheet, position={x:0,y:0},type) {
+    constructor(ctx, spritesheet, position={x:0,y:0},type, minSpeed = 2, maxSpeed = 3) {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
         this.position = {...position};
@@ -15,10 +15,10 @@ export  class Asteroid {
         
         this.scale = (Math.random() * (0.6 - 0.4) + 0.4) * mobileScale;
         if (this.type === 3){
-            this.scale = (Math.random() * (0.3 - 0.15) + 0.15) * mobileScale;
-            this.speed = Math.random() * (8 - 5) + 5;
+            this.scale = (Math.random() * (0.3 - 0.15) + 0.15) * mobileScale; // Los meteoritos pequeños son más rápidos
+            this.speed = Math.random() * (maxSpeed * 2 - minSpeed * 2) + minSpeed * 2; // Duplicamos la velocidad para los pequeños
         }
-        this.speed = Math.random() * (3 - 2) + 2;
+        this.speed = Math.random() * (maxSpeed - minSpeed) + minSpeed; // Usamos el rango de velocidad pasado
         this.createAsteroid();
     }
     createAsteroid(){
