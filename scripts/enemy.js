@@ -22,23 +22,20 @@ export class Enemy {
         this.death = false;
     }
         draw() {
-
         this.ctx.save();
 
         this.ctx.translate(this.position.x, this.position.y);
         this.ctx.rotate(this.angle + Math.PI / 2);
-        this.ctx.translate(-this.position.x, -this.position.y);
-        this.image.draw(this.ctx, this.position);
-        this.imageParts.draw(this.ctx, {x: this.position.x + 16, y: this.position.y + 9});
-        this.ctx.restore();
-          
-        this.ctx.save();
-
-        this.ctx.translate(this.position.x, this.position.y);
-        this.ctx.rotate(this.angle + Math.PI / 2);
+        
+        // Dibujamos el cuerpo principal (centrado en el nuevo origen)
+        this.image.draw(this.ctx, {x: 0, y: 0});
+        
+        // Dibujamos el ala derecha
+        this.imageParts.draw(this.ctx, {x: 16, y: 9});
+        
+        // Usamos scale() para invertir el canvas y dibujar el ala izquierda
         this.ctx.scale(-1, 1);
-        this.ctx.translate(-this.position.x, -this.position.y);
-        this.imageParts.draw(this.ctx, {x: this.position.x + 16, y: this.position.y + 9});
+        this.imageParts.draw(this.ctx, {x: 16, y: 9});
 
         this.ctx.restore();
       

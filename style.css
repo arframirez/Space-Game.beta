@@ -39,6 +39,7 @@ body{
       left: 0;
       display: flex;
       justify-content: center;
+      align-items: center;
       text-align: center;
       flex-direction: column;
       animation: menu-animation 7s infinite;
@@ -58,16 +59,9 @@ body{
 }
 h2{
       font-size: 50px;
-      margin-bottom: 30px;
 }
-.play-game{
-      cursor: pointer;
-      transition: 0.9s ;
 
-}
-.play-game:hover{
-      transform: scale(1.3);
-}
+
 
 .hud-button {
     position: absolute;
@@ -91,10 +85,6 @@ h2{
     background: rgba(255, 255, 255, 0.2);
 }
 
-.menu ion-icon{
-      font-size: 30px;
-      margin-bottom: 30px;
-}
 .score-container{
       position: absolute;
       left: 0;
@@ -129,13 +119,7 @@ h2{
       transition: all 0.2s ease;
       backdrop-filter: blur(10px);
 }
-/* 
-.button:hover {
-      background: rgba(255, 255, 255, 0.2);
-      border-color: rgba(255, 255, 255, 0.5);
-      transform: rotate(-45deg) scale(1.1);
-      border-bottom: 25px solid rgba(255, 255, 255, 0.3);
-} */
+
 
 .button:active {
       background: rgba(255, 255, 255, 0.2);
@@ -153,7 +137,7 @@ h2{
       background: rgba(255, 255, 255, 0.5);
       border-radius: 50%;
       pointer-events: none;
-      z-index: 999;
+  
 }
 .score, .high-score{
       font-size: 24px;
@@ -182,25 +166,25 @@ h2{
     touch-action: none; /* Evita gestos del navegador como zoom */
 }
 /* Contenedor del botón de recompensa */
-.ad{
-    /* Lo hacemos parte del layout flex del menú */
-    align-self: center; /* Se centra horizontalmente */
-    margin-top: 20px;   /* Espacio respecto al botón de Play */
-}
 
 /* Estilo del botón de recompensa */
-.play-game2{
+.menuElement {
     display: flex;
     justify-content: center;
     align-items: center;
-    border: 1px solid #444;
-    padding: 10px 15px; /* Añadimos padding para que no se vea apretado */
+    border: 1px solid #444;/* Añadimos padding para que no se vea apretado */
     max-width: 220px;   /* Un ancho máximo para que no sea demasiado grande */
     cursor: pointer;
-    transition: background 0.3s;
+    transition: 0.5s;
+    max-height: 40px;
+    margin-bottom: 5px;
+    padding: 35px;
 }
 
-.play-game2:hover {
+
+
+.play-game2:hover, .hangar-button:hover, .play-game:hover {
+      transform: scale(1.2);
     background: rgba(255, 255, 255, 0.1);
 }
 /* Media queries para móviles */
@@ -265,6 +249,36 @@ h2{
     .button ion-icon {
         font-size: 28px !important;
     }
+
+    /* --- Menú de Selección de Nave Responsivo --- */
+    .ship-selection-menu h2 {
+        font-size: 8vw;
+        margin-bottom: 10px;
+        padding: 0 10px; /* Evita que el texto toque los bordes */
+    }
+    .ship-options {
+        flex-wrap: wrap; /* Permite que los elementos se ajusten */
+        justify-content: center; /* Centra las naves */
+    }
+    .ship-option {
+        padding: 10px;
+        width: 80vw;
+        max-width: 300px;
+    }
+    .ship-option h3 {
+        font-size: 20px;
+    }
+    .ship-option p {
+        font-size: 12px;
+    }
+    .back-to-menu-button { margin-top: 20px; }
+
+    .ship-preview {
+        height: 80px; /* Altura fija para alinear mejor */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
 }
 
 /* Para pantallas muy pequeñas */
@@ -287,7 +301,7 @@ h2{
 
 @media screen and (orientation: landscape) and (max-height: 768px) {
     #joystick-zone {
-        width: 40% !important;
+        width: 35% !important;
         height: 100% !important;
         bottom: 0px !important;
         left: 0px !important;
@@ -335,6 +349,19 @@ h2{
     .menu ion-icon {
         font-size: 6vw !important;
         margin-bottom: 15px !important;
+    }
+
+    /* --- Menú de Selección de Nave en Landscape --- */
+    .ship-selection-menu h2 {
+        font-size: 5vw;
+        margin-bottom: 15px;
+    }
+    .ship-options {
+        flex-wrap: nowrap; /* Evita que se rompa la línea en landscape */
+    }
+    .ship-option {
+        padding: 10px;
+        max-width: 200px; /* Limita el ancho en pantallas horizontales */
     }
 }
 
@@ -500,4 +527,114 @@ h2{
     100% {
         transform: translateY(-20px);
     }
+}
+
+/* --- Estilos para el Menú de Selección de Nave --- */
+.ship-selection-menu {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: rgba(10, 10, 20, 0.8);
+    backdrop-filter: blur(5px);
+    z-index: 1002; /* Por encima del menú principal */
+    color: white;
+}
+
+.ship-options {
+    display: flex;
+    gap: 20px;
+    margin-top: 30px;
+    padding: 0 15px; /* Espaciado lateral */
+}
+
+.ship-option {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    padding: 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05);
+    width: 100%; /* Ocupa el espacio disponible */
+    max-width: 220px; /* Pero no más de esto */
+    /* ✅ Usamos flexbox para alinear el contenido verticalmente */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 250px; /* Asegura una altura mínima para todas las tarjetas */
+}
+
+.ship-option:hover, .ship-option.selected {
+    background: rgba(0, 255, 136, 0.2);
+    border-color: #00ff88;
+    transform: translateY(-10px);
+}
+
+.ship-text-content {
+    /* ✅ Este contenedor empujará la descripción hacia abajo */
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-top: 15px; /* ✅ Añadimos un espacio superior consistente */
+}
+
+.ship-option h3 {
+    font-size: 24px;
+}
+
+.ship-option p {
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+.ship-preview {
+    width: 100px;
+    height: 120px; /* Aumentamos la altura para dar espacio */
+    background-image: url('spaceShooter2_spritesheet.png');
+    background-repeat: no-repeat;
+    display: flex; /* Para centrar la imagen interna */
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+    image-rendering: pixelated; /* Para mantener el estilo pixel art */
+}
+
+/* Coordenadas de cada nave en el spritesheet */
+.ship-blue {
+    background-position: -278px 0px; 
+    width: 170px; height: 151px;
+    transform: scale(0.6); /* Ajustamos con transform para no afectar el layout */
+}
+
+.ship-green {
+    background-position: -448px -58px; 
+    width: 114px; height: 82px;
+    transform: scale(1);
+    margin-bottom: 37px;
+    margin-top: 30px;
+}
+
+.ship-red {
+    background-position: -562px -58px; 
+    width: 100px; height: 82px;
+    transform: scale(1);
+    margin-bottom: 37px;
+    margin-top: 30px;
+}
+
+.back-to-menu-button {
+    margin-top: 40px;
+    font-size: 40px;
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+.back-to-menu-button:hover {
+    transform: scale(1.2);
 }

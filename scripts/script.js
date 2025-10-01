@@ -5,6 +5,9 @@ import { Enemy } from "./enemy.js";
 import { Star } from "./star.js";
 import { Explosion } from "./explosion.js";
 import { Boss } from "./boss.js";
+import { PowerUp } from "./powerUp.js";
+import { Projectile } from "./projectile.js";
+import { Particle } from "./particle.js";
 import { AudioManager } from "./AudioManager.js";
 
 
@@ -20,6 +23,11 @@ const rewardButton = document.getElementById('reward-button');
 const muteButton = document.getElementById('mute-button');
 const btnMenu = document.querySelector('.play-game');
 const loadingScreen = document.getElementById('loading-screen');
+const shipSelectionMenu = document.querySelector('.ship-selection-menu');
+const hangarButton = document.querySelector('.hangar-button');
+const backToMenuButton = document.querySelector('.back-to-menu-button');
+const shipOptions = document.querySelectorAll('.ship-option');
+
 const muteIcon = muteButton ? muteButton.querySelector('ion-icon') : null;
 
 const highScoreElement = document.querySelector('.high-score');
@@ -64,7 +72,7 @@ const adCooldown = 120000; // 2 minutos en milisegundos
 
 // --- Variables de Dificultad Progresiva ---
 let currentDifficultyLevel = 0;
-const difficultyThresholds = [100, 300, 600, 1000, 1500, 2000, 2500, 3000, 4000, 5000]; // Puntos para aumentar dificultad
+const difficultyThresholds = [100, 299, 600, 1000, 1500, 2000, 2500, 3000, 4000, 5000]; // Puntos para aumentar dificultad
 
 // Valores iniciales de dificultad
 let currentAsteroidSpawnInterval = 500; // ms
@@ -72,6 +80,11 @@ let currentEnemySpawnInterval = 7000; // ms
 let currentEnemySpeed = 2;
 let currentAsteroidMinSpeed = 2;
 let currentAsteroidMaxSpeed = 3;
+
+// --- Probabilidades de Power-ups ---
+const POWERUP_CHANCE_FROM_ENEMY = 0.5; // 50%
+const POWERUP_CHANCE_FROM_ASTEROID = 0.25; // 25%
+
 
 let lastAsteroidSpawnTime = 0;
 let lastEnemySpawnTime = 0;
@@ -83,15 +96,17 @@ const bossSpawnThresholds = [300, 1000, 1800, 2600]; // Puntuaciones para que ap
 let currentBossLevel = 0; // Nivel actual del jefe (0, 1, 2, ...)
 
 let scoreCount = 0;
-
+let selectedShipType = 'blue'; // Nave por defecto
 
 const audioManager = new AudioManager();
-const ship = new Ship(ctx, spritesheet, canvas, audioManager); // 🔊 Pasamos el gestor de audio a la nave
+let ship = new Ship(ctx, spritesheet, canvas, audioManager, selectedShipType); // Se crea con el tipo seleccionado
 const asteroids = [];
 const labels = [];
 const enemies = [];
 const projectilesEnemy = [];
 const explosions = [];
+const powerUps = [];
+const particles = [];
 const stars = [];
 let highScore = 0;
 let asteroidInterval = null;
@@ -132,35 +147,32 @@ async function initCrazyGamesSDK() {
             crazySDK = window.CrazyGames.SDK;
             console.log("✅ CrazyGames SDK initialized.");
 
-            // Escuchar eventos de anuncios para depuración
-            crazySDK.addEventListener("adStarted", () => {
-                console.log("Ad started, pausing and muting game via SDK.");
-                isAdPlaying = true;
-                crazySDK.game.setVolume(0); // ✅ La forma más segura de silenciar
-            });
-            crazySDK.addEventListener("adFinished", () => {
-                console.log("Ad finished, resuming and unmuting game via SDK.");
-                isAdPlaying = false;
-                crazySDK.game.setVolume(1); // ✅ Restauramos el volumen
-            });
+            // Sincronizar el estado de volumen inicial del SDK
+            setGameVolume(crazySDK.audio.getVolume());
 
             // Listen for the site's mute button from CrazyGames
             crazySDK.addEventListener("mute", () => {
                 console.log("Mute event received from SDK.");
-                audioManager.isMuted = true;
-                if (muteIcon) muteIcon.name = 'volume-mute-outline';
+                setGameVolume(0);
             });
 
             crazySDK.addEventListener("unmute", () => {
                 console.log("Unmute event received from SDK.");
-                audioManager.isMuted = false;
-                if (muteIcon) muteIcon.name = 'volume-high-outline';
+                setGameVolume(1);
             });
         }
     } catch (error) {
         console.warn("⚠️ SDK de CrazyGames no se pudo inicializar. Los anuncios y guardado en la nube no funcionarán.", error);
     }
     }
+
+// Función centralizada para controlar el volumen
+function setGameVolume(volume) {
+    audioManager.volume = volume;
+    if (muteIcon) {
+        muteIcon.name = volume === 0 ? 'volume-mute-outline' : 'volume-high-outline';
+    }
+}
 
 
 // Function to display username if logged in
@@ -279,77 +291,53 @@ joystick.on('removed', (evt, nipple) => {
 
 // 🔫 Botón de disparo para móviles
 const shootButton = document.querySelector('.button');
+
 if (shootButton) {
-    // Función para disparar (reutilizada del código de teclado)
-    function shoot() {
-        // Llama al método centralizado en la clase Ship
-        ship.shoot();
-    }
-    
-    // Eventos del botón (tanto mouse como touch)
-    shootButton.addEventListener('click', shoot);
-    shootButton.addEventListener('touchstart', (e) => {
+    const startShooting = (e) => {
+        if (e) e.preventDefault(); // Prevenir gestos del navegador
         audioManager.unlockAudio(); // Desbloquea el audio en la primera interacción táctil
-        e.preventDefault(); // Prevenir double-tap y otros gestos
-        shoot();
-    });
-}
+        if (!ship || !play) return;
+        
+        // Le decimos a la nave que el botón está presionado
+        ship.isTouchShooting = true;
+    };
 
-if (rewardButton) {
-    rewardButton.addEventListener('click', async () => {
-        if (!crazySDK) {
-            alert("CrazyGames SDK not available.");
-            return;
-        }
+    const stopShooting = () => {
+        if (!ship) return;
+        // Le decimos a la nave que el botón se ha soltado
+        ship.isTouchShooting = false;
+    };
 
-        try {
-            // Solicitar un anuncio con recompensa
-            await crazySDK.ad.requestAd("rewarded");
+    // Eventos para iniciar el disparo
+    shootButton.addEventListener('mousedown', startShooting);
+    shootButton.addEventListener('touchstart', startShooting);
 
-            // Si el anuncio se vio con éxito, se aplica la recompensa
-            hasBonus = true;
-            
-            // Actualizar la UI para mostrar que el bonus está activo
-            rewardButton.style.display = 'none'; // Ocultar el botón
-            
-            const bonusMessage = document.createElement('p');
-            bonusMessage.id = "bonus-message";
-            bonusMessage.textContent = "Bonus activated! More shots for the next game.";
-            bonusMessage.style.color = "#00ff88";
-            bonusMessage.style.marginTop = "20px";
-            rewardButton.after(bonusMessage); // Añadir mensaje después del botón
-
-        } catch (e) {
-            console.error("Rewarded ad error:", e);
-             //Opcional: informar al usuario que el anuncio falló
-            alert("Could not load the ad. Please try again later.");
-        }
-    });
+    // Eventos para detener el disparo
+    shootButton.addEventListener('mouseup', stopShooting);
+    shootButton.addEventListener('mouseleave', stopShooting);
+    shootButton.addEventListener('touchend', stopShooting);
 }
 
 if (muteButton) {
     muteButton.addEventListener('click', () => {
-        audioManager.isMuted = !audioManager.isMuted;
-        muteIcon.name = audioManager.isMuted ? 'volume-mute-outline' : 'volume-high-outline';
-    });
-}
-
-if (btnMenu) {
-    btnMenu.addEventListener('click', () => {
-        audioManager.unlockAudio(); // Desbloquea el audio
-
-        // Request user login before starting the game
-        if (crazySDK && crazySDK.user && !crazySDK.user.isUserAccountAvailable) {
-            crazySDK.user.requestUserAccount().catch(e => console.warn("Login popup closed or failed", e));
+        const newVolume = audioManager.volume === 0 ? 1 : 0;
+        setGameVolume(newVolume);
+        // Notificar al SDK sobre el cambio de volumen hecho por el usuario
+        if (crazySDK && crazySDK.audio) {
+            crazySDK.audio.setVolume(newVolume);
         }
-
-        init();
     });
 }
 async function gameOver() {
     play = false;
     if (crazySDK && crazySDK.game && typeof crazySDK.game.gameplayStop === 'function') {
         try { crazySDK.game.gameplayStop(); } catch(e) { console.warn(e); }
+    }
+
+    // ✅ Reportar la puntuación final al SDK para leaderboards y análisis
+    if (crazySDK && crazySDK.game && typeof crazySDK.game.setScore === 'function') {
+        console.log(`Reporting final score to SDK: ${scoreCount}`);
+        try { crazySDK.game.setScore(scoreCount); } catch(e) { console.warn('Error setting score:', e); }
     }
 
     // Creamos una explosión en la posición de la nave y la ocultamos
@@ -360,12 +348,13 @@ async function gameOver() {
     // Muestra un anuncio "midgame" si ha pasado suficiente tiempo
     const now = Date.now();
     if (crazySDK && now - lastAdTime > adCooldown) {
-        try {
-            await crazySDK.ad.requestAd("midgame");
-             lastAdTime = now; // Actualiza el tiempo solo si el anuncio se mostró
-        } catch (e) {
-            console.error("Ad error:", e);
-        }
+        // try {
+        //     // await crazySDK.ad.requestAd("midgame");
+        //      lastAdTime = now; // Actualiza el tiempo solo si el anuncio se mostró
+        // } catch (e) {
+        //     console.error("Ad error:", e);
+        //     // Si el anuncio falla, no bloqueamos al jugador y continuamos al menú.
+        // }
     }
 
     // Después del anuncio (o si falla/se omite), muestra el menú
@@ -374,61 +363,71 @@ async function gameOver() {
 
     // Restaura el botón de recompensa para la siguiente sesión
     hasBonus = false; // Asegurarse de que el bonus se reinicie
-    const bonusMessage = document.getElementById('bonus-message');
-    if (bonusMessage) {
-        bonusMessage.remove();
-    }
-    if (rewardButton) {
-        rewardButton.style.display = 'flex';
+    const rewardAdButton = document.getElementById('reward-button');
+    if (rewardAdButton) {
+        // Restauramos el contenido HTML original del botón
+        rewardAdButton.innerHTML = `
+            <ion-icon name="gift-outline"></ion-icon>
+            <span class="ad-text">Get Bonus Shots</span>
+        `;
+        // Restauramos los estilos para que sea clickeable de nuevo
+        rewardAdButton.style.pointerEvents = 'auto';
+        rewardAdButton.style.border = ''; // O el borde original si lo tenía
     }
 
-    showBanner(); // Show banner in the Game Over menu
+    // showBanner(); // Show banner in the Game Over menu
 }
 
-// --- showBanner simplificado ---
+/**
+ * Solicita y muestra un banner publicitario responsivo.
+ * Se encarga de hacer visible el contenedor del banner y pedir al SDK de CrazyGames
+ * que llene el 'slot' designado con un anuncio.
+ */
 async function showBanner() {
-    if (!crazySDK) {
-        console.warn('CrazySDK no disponible, no se pide banner.');
-        return;
-    }
-    const container = document.getElementById('banner-container');
-    if (container) {
-        container.style.display = 'flex';
-    }
+    // --- Banner deshabilitado ---
+    // if (!crazySDK) {
+    //     console.warn('CrazySDK no disponible, no se pide banner.');
+    //     return;
+    // }
+    // // Hacemos visible el contenedor principal del banner.
+    // const container = document.getElementById('banner-container');
+    // if (container) {
+    //     container.style.display = 'flex';
+    // }
 
-    const slotId = 'banner-slot'; // <- usamos el slot con tamaño exacto
-    const slot = document.getElementById(slotId);
-    if (!slot) {
-        console.warn('No existe el slot de banner:', slotId);
-        return;
-    }
+    // // El ID del elemento HTML donde se inyectará el banner.
+    // const slotId = 'banner-slot';
+    // const slot = document.getElementById(slotId);
+    // if (!slot) {
+    //     console.warn('No existe el slot de banner:', slotId);
+    //     return;
+    // }
 
-    try {
-        console.log('Requesting banner into slot:', slotId);
-        // La llamada original al SDK
-        // Cambiamos a requestResponsiveBanner, que es el método correcto para un contenedor de tamaño variable.
-        await crazySDK.banner.requestResponsiveBanner(slotId);
-        console.log('Banner mostrado correctamente.');
-    } catch (err) {
-        // Un log de error simple es suficiente ahora que la causa raíz está resuelta.
-        console.error('No se pudo mostrar banner:', err);
-    }
+    // // Solicitamos un banner al SDK. Este se adaptará al tamaño del slot.
+    // try {
+    //     console.log('Requesting banner into slot:', slotId);
+    //     await crazySDK.banner.requestResponsiveBanner(slotId);
+    //     console.log('Banner mostrado correctamente.');
+    // } catch (err) {
+    //     console.error('No se pudo mostrar banner:', err);
+    // }
 }
 
-// --- hideBanner con try/catch ---
+/**
+ * Oculta el contenedor del banner y le pide al SDK que lo limpie.
+ * Es importante llamar a clearBanner para liberar recursos.
+ */
 async function hideBanner() {
-    const container = document.getElementById('banner-container');
-    if (container) {
-        container.style.display = 'none';
-    }
-
-    if (!crazySDK || !crazySDK.banner) return;
-    try {
-        await crazySDK.banner.clearBanner();
-        console.log('Banner ocultado/limpiado.');
-    } catch (e) {
-        console.warn('Error al ocultar banner:', e);
-    }
+    // --- Banner deshabilitado ---
+    // const container = document.getElementById('banner-container');
+    // if (container) container.style.display = 'none';
+    // if (!crazySDK || !crazySDK.banner) return;
+    // try {
+    //     await crazySDK.banner.clearBanner();
+    //     console.log('Banner ocultado/limpiado.');
+    // } catch (e) {
+    //     console.warn('Error al ocultar banner:', e);
+    // }
 }
 function init() {
 
@@ -446,26 +445,39 @@ function init() {
     enemies.length = 0;
     projectilesEnemy.length = 0;
     explosions.length = 0;
+    powerUps.length = 0;
+    particles.length = 0;
 
-    // Reiniciamos la nave
-    ship.position = { x: 200, y: 200 };
+    // Si ya existe una nave de una partida anterior, limpiamos sus listeners
+    if (ship) {
+        ship.destroy();
+    }
+
+    // Creamos una nueva instancia de la nave y ella misma se encargará de sus eventos
+    ship = new Ship(ctx, spritesheet, canvas, audioManager, selectedShipType);
     ship.projectiles.length = 0;
     ship.speed = 0;
     ship.angle = 0;
 
     // Apply bonus if active
     if (hasBonus) {
-        ship.maxShots = 15; // Original is 10
+        ship.maxShots = ship.config.bonusMaxShots; // Usamos el valor de bono de la nave
         hasBonus = false; // Use the bonus only once
-    } else {
-        ship.maxShots = 10; // Default value
-    }
+    } // Si no hay bono, la nave ya se inicializó con sus maxShots por defecto
 
     // Reset shot limiter and block
     ship.availableShots = ship.maxShots;  // Restore all available shots
     ship.blocked = false;                 // Unblock shooting
     ship.recharging = false;              // Stop automatic recharge    
     // 🔹 Limpiar el temporizador de bloqueo para evitar que se quede activo entre partidas
+    // Reiniciar estados de power-ups
+    ship.isShielded = false;
+    if (ship.shieldTimer) clearTimeout(ship.shieldTimer);
+    if (ship.invincibilityTimer) clearTimeout(ship.invincibilityTimer);
+    ship.isRapidFire = false;
+    if (ship.rapidFireTimer) clearTimeout(ship.rapidFireTimer);
+
+
     // Reiniciar variables del jefe
     boss = null;
     bossActive = false; // ✅ Reinicia el estado del jefe para la nueva partida
@@ -497,8 +509,85 @@ function init() {
     menuStatus = false;
     play = true;
 
-    hideBanner(); // Hide the banner when the game starts
+    // hideBanner(); // Hide the banner when the game starts
 }
+
+// --- Manejo de eventos del menú con delegación ---
+if (menu) {
+    menu.addEventListener('click', async (e) => {
+        const playButton = e.target.closest('.play-game');
+        const rewardAdButton = e.target.closest('#reward-button');
+        const hangarBtn = e.target.closest('.hangar-button');
+
+        if (playButton) {
+            audioManager.unlockAudio(); // Desbloquea el audio
+
+            // Solicitar login de usuario antes de empezar a jugar
+            if (crazySDK && crazySDK.user && !crazySDK.user.isUserAccountAvailable) {
+                crazySDK.user.requestUserAccount().catch(err => console.warn("Login popup closed or failed", err));
+            }
+
+            init(); // Inicia el juego
+            return;
+        }
+
+        if (hangarBtn) {
+            menu.style.display = 'none';
+            shipSelectionMenu.style.display = 'flex';
+            updateSelectedShipVisual();
+        }
+
+        if (rewardAdButton) {
+            if (!crazySDK) {
+                alert("CrazyGames SDK not available.");
+                return;
+            }
+            try {
+                // Solicitar un anuncio con recompensa
+                // await crazySDK.ad.requestAd("rewarded");
+                hasBonus = true;
+                
+                // Reemplazamos el contenido del botón para mostrar el mensaje de éxito,
+                // sin afectar a los otros elementos del menú.
+                rewardAdButton.innerHTML = `<p id="bonus-message" style="color: #00ff88;">Bonus activated!</p>`;
+                rewardAdButton.style.pointerEvents = 'none'; // Desactivamos clics futuros
+                rewardAdButton.style.border = '1px solid #00ff88'; // Feedback visual
+            } catch (err) {
+                console.error("Rewarded ad error:", err);
+                const adText = rewardAdButton.querySelector('.ad-text');
+                if (adText) {
+                    adText.textContent = "Ad not ready. Try again!";
+                    setTimeout(() => { adText.textContent = "Get Bonus Shots!"; }, 2000);
+                }
+            }
+        }
+    });
+}
+
+// --- Lógica para el menú de selección de nave ---
+if (backToMenuButton) {
+    backToMenuButton.addEventListener('click', () => {
+        shipSelectionMenu.style.display = 'none';
+        menu.style.display = 'flex';
+    });
+}
+
+shipOptions.forEach(option => {
+    option.addEventListener('click', () => {
+        selectedShipType = option.getAttribute('data-ship-type');
+        console.log(`Nave seleccionada: ${selectedShipType}`);
+        updateSelectedShipVisual();
+        // Opcional: volver al menú principal automáticamente
+        // shipSelectionMenu.style.display = 'none';
+        // menu.style.display = 'flex';
+    });
+});
+
+function updateSelectedShipVisual() {
+    shipOptions.forEach(opt => opt.classList.remove('selected'));
+    document.querySelector(`.ship-option[data-ship-type="${selectedShipType}"]`).classList.add('selected');
+}
+
 function createStars() {
     
     for (let i = 0; i < 10; i++) {
@@ -545,7 +634,7 @@ function spawnBoss() {
     // Podrías tocar una música de jefe aquí
 }
 function collision(Object1, Object2) {
-    // ✅ Comprobación de seguridad: si alguno de los objetos o sus propiedades necesarias no existen, no hay colisión.
+    // ✅ Comprobación de seguridad: si alguno de los objetos no es válido, no hay colisión.
     if (!Object1 || !Object2 || !Object1.position || !Object2.position || !Object1.image || !Object2.image) {
         return false;
     }
@@ -561,7 +650,22 @@ function collision(Object1, Object2) {
 
     return distance < Object1.image.radio + Object2.image.radio;
 }
+
+function spawnPowerUp(position) {
+    // 50% de probabilidad para cada tipo de power-up
+    const type = Math.random() < 0.5 ? 'shield' : 'rapidFire';
+    const powerUp = new PowerUp(ctx, spritesheet, { ...position }, type);
+    powerUps.push(powerUp);
+}
+// ✅ Función movida al scope global para que sea accesible desde cualquier parte.
+function createParticleBurst(position, color, count = 25) {
+    for (let i = 0; i < count; i++) {
+        // Añadimos partículas con un poco de aleatoriedad en tamaño y velocidad
+        particles.push(new Particle(ctx, position.x, position.y, color, 4, 5));
+    }
+}
 function createMeteors(position) {
+
      let count = Math.floor(Math.random() * (5 - 3 + 1)) + 3;
      for (let i = 0; i < count; i++) {
          let meteor = new Asteroid(ctx, spritesheet, position, 3);
@@ -573,27 +677,64 @@ function createMeteors(position) {
 
 function collisionObjects() {
     // Colisión de la nave con asteroides y enemigos
-    for (let i = asteroids.length - 1; i >= 0; i--) {
-        if (collision(ship, asteroids[i])) {
-            gameOver();
-            return;
+    const collidableObjects = [...asteroids, ...enemies, ...projectilesEnemy];
+    if (bossActive && boss) collidableObjects.push(boss);
+
+    for (let i = collidableObjects.length - 1; i >= 0; i--) {
+        const object = collidableObjects[i];
+        if (collision(ship, object)) {
+            if (ship.isShielded) {
+                // Si el escudo está activo, destruimos el objeto pero la nave está a salvo
+                explosions.push(new Explosion(ctx, spritesheet, object.position, 1.0));
+                audioManager.playSound('explosion', 0.5);
+
+                // Eliminar el objeto del array correspondiente
+                if (object instanceof Asteroid) {
+                    const index = asteroids.indexOf(object);
+                    if (index > -1) asteroids.splice(index, 1);
+                } else if (object instanceof Enemy) {
+                    const index = enemies.indexOf(object);
+                    if (index > -1) enemies.splice(index, 1);
+                } else if (object instanceof Projectile) {
+                    const index = projectilesEnemy.indexOf(object);
+                    if (index > -1) projectilesEnemy.splice(index, 1);
+                }
+                // No hacemos 'return' para que el escudo pueda destruir múltiples objetos en un frame
+            } else {
+                // Si no hay escudo, fin del juego
+                ship.takeDamage();
+                audioManager.playSound('explosion', 0.7); // Sonido de golpe
+
+                // Crear una pequeña explosión en la posición de la nave para feedback visual
+                explosions.push(new Explosion(ctx, spritesheet, { ...ship.position }, 0.8));
+
+                // Eliminar el objeto con el que chocó
+                if (object instanceof Asteroid) asteroids.splice(asteroids.indexOf(object), 1);
+                else if (object instanceof Enemy) enemies.splice(enemies.indexOf(object), 1);
+                else if (object instanceof Projectile) projectilesEnemy.splice(projectilesEnemy.indexOf(object), 1);
+
+                // Comprobar si la vida ha llegado a 0
+                if (ship.health <= 0) {
+                    gameOver();
+                    return; // Salimos de la función para evitar más procesado
+                }
+                // Si la nave sobrevive al golpe, no hacemos 'return' y seguimos el bucle
+            }
         }
     }
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        if (collision(enemies[i], ship)) {
-            gameOver();
-            return;
+
+    // Colisión de la nave con power-ups
+    for (let i = powerUps.length - 1; i >= 0; i--) {
+        if (collision(ship, powerUps[i])) {
+            const powerUp = powerUps[i];
+            ship.activatePowerUp(powerUp.type);
+
+            // ✅ Generamos el efecto de partículas al recoger el power-up
+            const particleColor = powerUp.type === 'shield' ? '#00ccff' : '#ffdd00';
+            createParticleBurst(powerUp.position, particleColor);
+
+            powerUps.splice(i, 1);
         }
-    }
-    for (let i = projectilesEnemy.length - 1; i >= 0; i--) {
-        if (collision(projectilesEnemy[i], ship)) {
-            gameOver();
-            return;
-        }
-    }
-    // Colisión de la nave con el jefe
-    if (bossActive && boss && collision(ship, boss)) {
-        gameOver();
     }
 
     // Colisiones de proyectiles enemigos
@@ -651,8 +792,13 @@ function collisionObjects() {
         // Con enemigos
         for (let j = enemies.length - 1; j >= 0; j--) {
             if (collision(ship.projectiles[i], enemies[j])) {
-                labels.push(new Label(ctx, { ...enemies[j].position }, '+20 Score', '#00ff00', font, fontWeight));
-                scoreCount += 20;
+                labels.push(new Label(ctx, { ...enemies[j].position }, '+60 Score', '#00ff00', font, fontWeight));
+                scoreCount += 60;
+
+                // Probabilidad de soltar un power-up
+                if (Math.random() < POWERUP_CHANCE_FROM_ENEMY) {
+                    spawnPowerUp(enemies[j].position);
+                }
 
                 explosions.push(new Explosion(ctx, spritesheet, enemies[j].position, 1.2));
                 audioManager.playSound('explosion', 0.8);
@@ -673,13 +819,18 @@ function collisionObjects() {
                 audioManager.playSound('explosion', 0.6);
 
                 if (asteroids[j].type === 1) {
-                    labels.push(new Label(ctx, { ...asteroids[j].position }, '+10 Score', '#ffffff', font, fontWeight));
-                    scoreCount += 10;
+                    labels.push(new Label(ctx, { ...asteroids[j].position }, '+30 Score', '#ffffff', font, fontWeight));
+                    scoreCount += 30;
+                    
+                    // Probabilidad de soltar un power-up al destruir un asteroide grande
+                    if (Math.random() < POWERUP_CHANCE_FROM_ASTEROID) {
+                        spawnPowerUp(asteroids[j].position);
+                    }
                 } else if (asteroids[j].type === 2) {
                     createMeteors(asteroids[j].position);
                 } else {
-                    labels.push(new Label(ctx, { ...asteroids[j].position }, '+5 Score', 'red', font, fontWeight));
-                    scoreCount += 5;
+                    labels.push(new Label(ctx, { ...asteroids[j].position }, '+15 Score', 'red', font, fontWeight));
+                    scoreCount += 15;
                 }
 
                 asteroids.splice(j, 1);
@@ -724,8 +875,15 @@ function defeatBoss() {
     explosions.push(new Explosion(ctx, spritesheet, boss.position, 4.0)); // Gran explosión
     audioManager.playSound('explosion', 1.0);
 
-    labels.push(new Label(ctx, { ...boss.position }, '+500 Score!', '#ffcc00', font, fontWeight));
-    scoreCount += 250 + (currentBossLevel * 250); // Más puntos por jefes más difíciles
+    // ¡Momento feliz! Notificamos al SDK que el jugador ha derrotado a un jefe.
+    if (crazySDK && crazySDK.game) {
+        try { crazySDK.game.happytime(); } catch(e) { console.warn(e); }
+    }
+
+    // Calculamos la puntuación del jefe y la usamos en la etiqueta y en el contador
+    const bossScore = 250 + (currentBossLevel * 250);
+    labels.push(new Label(ctx, { ...boss.position }, `+${bossScore} Score!`, '#ffcc00', font, fontWeight));
+    scoreCount += bossScore;
 
     boss = null;
     bossActive = false; // ✅ Reiniciamos el estado para que vuelvan a aparecer enemigos
@@ -739,6 +897,9 @@ function updateDifficulty() {
     if (currentDifficultyLevel < difficultyThresholds.length && scoreCount >= difficultyThresholds[currentDifficultyLevel]) {
         currentDifficultyLevel++;
         console.log(`¡Dificultad aumentada a nivel ${currentDifficultyLevel}! Score: ${scoreCount}`);
+
+        // ✨ Mostrar mensaje de "Level Up" en pantalla
+        labels.push(new Label(ctx, { x: canvas.width / 2, y: canvas.height / 2 }, `Level ${currentDifficultyLevel}!`, '#00ffff', font, fontWeight));
 
         // Ajustar intervalos de spawn (mínimo 150ms para asteroides, 2000ms para enemigos)
         currentAsteroidSpawnInterval = Math.max(150, currentAsteroidSpawnInterval * 0.9);
@@ -800,40 +961,60 @@ function updateObjects(){
         boss.update(projectilesEnemy);
     }
 
-    asteroids.forEach((asteroid, i) => {
-        asteroid.update(hitBox);
-        if (asteroid.collision(canvas)) {
-            setTimeout(() => {
-                asteroids.splice(i, 1);
-            }, 0);
+    // Usamos bucles 'for' inversos para eliminar elementos de forma segura
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+        asteroids[i].update(hitBox);
+        if (asteroids[i].collision(canvas)) {
+            asteroids.splice(i, 1);
         }
-    });
-    labels.forEach((label, i) => {
-        label.update();
-        if (label.opacity <= 0) {
-            setTimeout(() => {
-                labels.splice(i, 1);
-            }, 0);
-        }
-    });
+    }
 
-    projectilesEnemy.forEach((projectile, i) => {
-        projectile.update();
-    });
-
-    enemies.forEach((enemy, i) => {
-        enemy.update(hitBox);
-        enemy.createProjectile(projectilesEnemy);
-        if (enemy.collision(canvas)) {
-            setTimeout(() => {
-                enemies.splice(i, 1);
-            }, 0);
+    for (let i = labels.length - 1; i >= 0; i--) {
+        labels[i].update();
+        if (labels[i].opacity <= 0) {
+            labels.splice(i, 1);
         }
-    });
+    }
+
+    for (let i = projectilesEnemy.length - 1; i >= 0; i--) {
+        projectilesEnemy[i].update();
+        // Si los proyectiles enemigos también necesitan ser eliminados al salir de la pantalla,
+        // se debería añadir una lógica similar a la de los proyectiles del jugador.
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        enemies[i].update(hitBox);
+        enemies[i].createProjectile(projectilesEnemy);
+        if (enemies[i].collision(canvas)) {
+            enemies.splice(i, 1);
+        }
+    }
+
+    for (let i = powerUps.length - 1; i >= 0; i--) {
+        powerUps[i].update();
+        powerUps[i].draw();
+        if (hitBox) powerUps[i].hitbox();
+        if (powerUps[i].isFinished) powerUps.splice(i, 1);
+    }
+
+    // Actualizamos y dibujamos las partículas
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].draw();
+        if (particles[i].lifespan <= 0) {
+            particles.splice(i, 1);
+        }
+    }
 }
 
 function update() {
     // SDK Requirement: Pause the game if an ad is playing or tab is hidden.
+    // También pausamos si no hay nave (p. ej. antes de la primera partida)
+    if (!ship) {
+        requestAnimationFrame(update);
+        return;
+    }
+
     if (isAdPlaying || isPausedByVisibility) {
         requestAnimationFrame(update);
         return; // No ejecutar ninguna lógica del juego
@@ -863,14 +1044,20 @@ function update() {
     requestAnimationFrame(update);
 }
 
+// --- Lógica de Banner en Redimensionamiento ---
 let bannerResizeTimeout = null;
 window.addEventListener('resize', () => {
+    // Cancelamos el temporizador anterior si el usuario sigue redimensionando la ventana.
     if (bannerResizeTimeout) clearTimeout(bannerResizeTimeout);
+
+    // Establecemos un nuevo temporizador para ejecutar la lógica después de que el usuario deje de redimensionar.
     bannerResizeTimeout = setTimeout(() => {
-        // Si el menú está abierto, actualizamos / reintentamos mostrar banner
+        // Si el menú está abierto (y por lo tanto, un banner debería estar visible),
+        // recargamos el banner para que se ajuste al nuevo tamaño de pantalla.
         if (menuStatus) {
-            // limpiar y pedir de nuevo
-            hideBanner().finally(() => showBanner());
+            // Ocultamos el banner actual y, una vez oculto, solicitamos uno nuevo.
+            // .finally() asegura que showBanner() se llame incluso si hideBanner() falla.
+            // hideBanner().finally(() => showBanner());
         }
     }, 300);
 });
@@ -905,7 +1092,7 @@ async function main() {
 
     // 7. Mostrar el banner inicial si estamos en el menú
     if (menuStatus) {
-        showBanner();
+        // showBanner();
     }
 }
 

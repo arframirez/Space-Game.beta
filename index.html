@@ -69,16 +69,53 @@
 
     <div class="menu">
         <h2>Astro Blaze</h2>
-        <div class="play-game">
+        <div class="menuElement play-game">
             <ion-icon name="play-outline"></ion-icon>
+            <span>Begin Adventure</span>
+        </div>
+        <!-- Botón para ir al Hangar/Selección de Nave -->
+        <div class="menuElement hangar-button">
+            <ion-icon name="rocket"></ion-icon>
+            <span>Select character</span>
         </div>
         <!-- Botón para anuncio con recompensa -->
-         <div class="ad">
-        <div id="reward-button" class="play-game2" >
+        <div id="reward-button" class="menuElement play-game2" >
             <ion-icon name="gift-outline"></ion-icon>
-            <span class="ad-text">Get Bonus Shots!</span>
+            <span class="ad-text">Get Bonus Shots</span>
         </div>
+    
+    </div>
+
+    <!-- Menú de Selección de Nave (Oculto por defecto) -->
+    <div class="ship-selection-menu" style="display: none;">
+        <h2>CHOOSE YOUR SHIP</h2>
+        <div class="ship-options">
+            <!-- Opción 1: Nave Azul (Por defecto) -->
+            <div class="ship-option" data-ship-type="blue">
+                <div class="ship-preview ship-blue"></div>
+                <div class="ship-text-content">
+                    <h3>Blazer</h3>
+                    <p>Balanced Stats</p>
+                </div>
+            </div>
+            <!-- Opción 2: Nave Verde -->
+            <div class="ship-option" data-ship-type="green">
+                <div class="ship-preview ship-green"></div>
+                <div class="ship-text-content">
+                    <h3>Interceptor</h3>
+                    <p>High Speed</p>
+                </div>
+            </div>
+            <!-- Opción 3: Nave Roja -->
+            <div class="ship-option" data-ship-type="red">
+                <div class="ship-preview ship-red"></div>
+                 <div class="ship-text-content">
+                    <h3>Vindicator</h3>
+                    <p>Heavy Armor</p>
+                </div>
+            </div>
         </div>
+        <div class="back-to-menu-button"><ion-icon name="arrow-back-outline"></ion-icon></div>
     </div>
 
     <div id="loading-screen">
@@ -122,6 +159,7 @@
         })();
     </script>
     <script src="scripts/boss.js" type="module"></script>
+    <script src="scripts/particle.js" type="module"></script>
     <script src="scripts/script.js" type="module"></script>
    
 </body>
