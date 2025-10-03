@@ -8,7 +8,7 @@ export class PowerUp {
      * @param {CanvasRenderingContext2D} ctx El contexto del canvas.
      * @param {HTMLImageElement} spritesheet La hoja de sprites.
      * @param {{x: number, y: number}} position La posición inicial del power-up.
-     * @param {'shield' | 'rapidFire'} type El tipo de power-up.
+     * @param {'shield' | 'rapidFire' | 'extraLife'} type El tipo de power-up.
      */
     constructor(ctx, spritesheet, position, type) {
         this.ctx = ctx;
@@ -22,10 +22,13 @@ export class PowerUp {
         let spriteCoords;
         if (type === 'shield') {
             // Coordenadas para 'powerupGreen_shield.png'
-            spriteCoords = { x: 874, y: 92 };
+            spriteCoords = { x: 920, y: 533 };
         } else if (type === 'rapidFire') {
             // Coordenadas para 'powerupBlue_bolt.png'
-            spriteCoords = { x: 874, y: 143 };
+            spriteCoords = { x: 877, y: 990 };
+        } else if (type === 'extraLife') {
+            // ➕ Coordenadas para 'powerupRed_pill.png'
+            spriteCoords = { x: 880, y: 1040 };
         }
 
         this.image = new Object(spritesheet, spriteCoords, 34, 33, scale);

@@ -8,6 +8,9 @@
 </head>
 <body ontouchstart="">
 
+    <!-- ✅ Canvas oculto para pre-renderizar el fondo y optimizar rendimiento -->
+    <canvas id="background-canvas" style="display: none;"></canvas>
+
     <div class="game">
     <canvas id="canvas"></canvas>
 
@@ -45,6 +48,10 @@
     <div id="recharge" style="margin-top:5px;  color:#00ff88;"></div>
 </div>
 
+<!-- ➕ Contenedor para la vida de la nave -->
+<div id="health-container" class="score-container" style="position: absolute; font-size: 12px;  width: 10px; height: 100px; opacity: 0.7;">
+    <span id="health-display"></span>
+</div>
 
 
    
@@ -115,7 +122,6 @@
                 </div>
             </div>
         </div>
-        <div class="back-to-menu-button"><ion-icon name="arrow-back-outline"></ion-icon></div>
     </div>
 
     <div id="loading-screen">

@@ -1,21 +1,37 @@
 import { Object } from './object.js';
 export class Projectile {
-    constructor(ctx, spritesheet, position, angle, type) {
+    constructor(ctx, spritesheet) {
         this.ctx = ctx;
-        
+        this.spritesheet = spritesheet;
+
+        // ✅ Propiedades que se establecerán en el método init()
+        this.position = { x: 0, y: 0 };
+        this.angle = 0;
+        this.speed = 15;
+        this.type = false; // false para jugador, true para enemigo
+        this.active = false; // ✅ La propiedad clave para el object pooling
+
         // 📱 Escala dinámica para móviles
         const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
         const mobileScale = isMobile ? 0.8 : 1.0; // 80% en móvil, 100% en desktop
-        
-        this.image = new Object(spritesheet, {x: 1092, y: 458}, 20, 35, 0.7 * mobileScale);
-        this.imageEff = new Object(spritesheet, {x: 549, y: 384}, 13, 30, 0.5 * mobileScale);
+
+        // ✅ Creamos las plantillas de imagen una sola vez en el constructor
+        this.playerImage = new Object(spritesheet, { x: 1092, y: 458 }, 20, 35, 0.7 * mobileScale);
+        this.playerImageEff = new Object(spritesheet, { x: 549, y: 384 }, 13, 30, 0.5 * mobileScale);
+        this.enemyImage = new Object(spritesheet, { x: 521, y: 299 }, 16, 48, 0.8 * mobileScale);
+
+        this.image = this.playerImage; // Imagen por defecto
+    }
+
+    /**
+     * ✅ Inicializa o "resetea" un proyectil de la piscina con nuevos valores.
+     */
+    init(position, angle, type = false) {
         this.position = position;
         this.angle = angle;
-        this.speed = 15;
         this.type = type;
-        if(type){
-            this.image = new Object(spritesheet, {x: 521, y: 299}, 16, 48, 0.8 * mobileScale);
-        }
+        this.image = type ? this.enemyImage : this.playerImage;
+        this.active = true;
     }
 
     collision(canvas) {
@@ -41,8 +57,8 @@ export class Projectile {
         this.ctx.rotate(this.angle + Math.PI);
         this.ctx.translate(-this.position.x, -this.position.y);
         this.image.draw(this.ctx, {x: this.position.x, y: this.position.y});
-        if(!this.type){
-             this.imageEff.draw(this.ctx, {x: this.position.x, y: this.position.y+18});
+        if (!this.type) {
+             this.playerImageEff.draw(this.ctx, {x: this.position.x, y: this.position.y+18});
         }
         this.ctx.restore();
     }

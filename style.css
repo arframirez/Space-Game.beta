@@ -409,7 +409,7 @@ h2{
 }
 
 #user-info {
-    top: 15px;
+    top: 18px;
     right: 60px; /* Al lado del botón de mute */
     text-align: right;
 }
@@ -419,7 +419,7 @@ h2{
     #user-info {
         font-size: 12px;
         top: 18px;
-        right: 60px;
+        right: 60px; /* Ajustado para móviles */
         max-width: 100px; /* Evita que se desborde */
         white-space: nowrap;
         overflow: hidden;
@@ -537,7 +537,7 @@ h2{
     top: 0;
     left: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: column; /* Cambiado para mejor control */
     justify-content: center;
     align-items: center;
     text-align: center;
@@ -545,6 +545,8 @@ h2{
     backdrop-filter: blur(5px);
     z-index: 1002; /* Por encima del menú principal */
     color: white;
+    padding: 10px 0; /* Añadimos padding vertical */
+    overflow: auto; /* Permite scroll si el contenido es muy alto */
 }
 
 .ship-options {
@@ -630,7 +632,7 @@ h2{
 }
 
 .back-to-menu-button {
-    margin-top: 40px;
+    margin-top: 20px; /* Reducimos el margen superior */
     font-size: 40px;
     cursor: pointer;
     transition: transform 0.3s;

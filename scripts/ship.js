@@ -12,9 +12,9 @@ export class Ship{
             // --- Stats ---
             health: 2,
             shotType: 'double',
-            turnRate: 0.08,
-            maxSpeed: 8,
-            acceleration: 0.2,
+            turnRate: 0.09,
+            maxSpeed: 9,
+            acceleration: 0.25,
             maxShots: 10,
             bonusMaxShots: 15,
             rechargeRate: 1000, // Tasa de recarga estándar (ms)
@@ -27,9 +27,9 @@ export class Ship{
             // --- Stats ---
             health: 1,
             shotType: 'single_fast',
-            turnRate: 0.09,      // Gira más rápido
-            maxSpeed: 11,       // Más rápida
-            acceleration: 0.25, // Acelera más rápido
+            turnRate: 0.1,      // Gira más rápido
+            maxSpeed: 12,       // Más rápida
+            acceleration: 0.30, // Acelera más rápido
             maxShots: 12, // Más disparos para compensar el tiro único
             bonusMaxShots: 18,
             rechargeRate: 500, // ¡Recarga más rápido!
@@ -42,21 +42,23 @@ export class Ship{
             // --- Stats ---
             health: 3,
             shotType: 'spread',
-            turnRate: 0.06,     // Gira más lento
-            maxSpeed: 6,        // Más lenta
-            acceleration: 0.15, // Acelera más lento
+            turnRate: 0.07,     // Gira más lento
+            maxSpeed: 7,        // Más lenta
+            acceleration: 0.2, // Acelera más lento
             maxShots: 5, // Menos disparos, pero más potentes
             bonusMaxShots: 8,
             rechargeRate: 1000, // Recarga más lento para equilibrar el poder
         }
     };
 
-    constructor(ctx, spritesheet, canvas, audioManager, shipType = 'blue') {
+    constructor(ctx, spritesheet, canvas, audioManager, projectilePool, shipType = 'blue') {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
         this.canvas = canvas;
         this.audioManager = audioManager; // Guardamos la referencia al gestor de audio
-
+        this.projectilePool = projectilePool; // ✅ Guardamos la referencia a la piscina de proyectiles
+        this.projectiles = []; // ✅ Este array ahora contendrá los proyectiles ACTIVOS
+        
         // 📱 Escala dinámica para móviles y orientación
         const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
         const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth < 768;
@@ -96,7 +98,6 @@ export class Ship{
         this.imageEff = new Object(spritesheet,{x: 549, y: 322}, 13, 30, 0.6 * mobileScale);
         this.position = {x: 200, y: 200};
         this.speed = 0
-        this.projectiles = [];
         this.keys = {
             A: false,
             D: false,
@@ -133,6 +134,12 @@ export class Ship{
         // ✅ Control de cadencia de disparo para evitar saturación
         this.lastShotTime = 0;
         this.shotCooldown = 150; // ms. Cadencia base de disparo.
+
+        // ✅ Pre-cálculo de valores de movimiento para optimización
+        this.effectiveMaxSpeed = isMobile ? this.maxSpeed * 0.7 : this.maxSpeed;
+        this.effectiveAcceleration = isMobile ? this.acceleration * 0.8 : this.acceleration;
+        this.deceleration = isMobile ? 0.08 : 0.12;
+
 
         // ✅ Activamos los listeners del teclado al crear la nave
         this._addEventListeners();
@@ -185,13 +192,6 @@ export class Ship{
         this.ctx.restore();
     }
 move() {
-    // --- 1) Detección de entorno
-    const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
-
-    // Configuración de velocidad adaptable
-    const maxSpeed = isMobile ? this.maxSpeed * 0.7 : this.maxSpeed; // Usamos la estadística de la nave
-    const acceleration = isMobile ? this.acceleration * 0.8 : this.acceleration; // Usamos la estadística de la nave
-    const deceleration = isMobile ? 0.08 : 0.12;  // Frenado también más lento
 
     // --- 2) Rotación por teclado (desktop)
     if (this.keys.D) this.angle += this.turnRate;
@@ -206,18 +206,18 @@ move() {
     // --- 4) Control con joystick prioritario
     if (jIntensity > 0.05) {
         this.angle = Math.atan2(jDir.y, -jDir.x) + Math.PI / 2;
-        this.speed = Math.min(maxSpeed, maxSpeed * jIntensity);
+        this.speed = Math.min(this.effectiveMaxSpeed, this.effectiveMaxSpeed * jIntensity);
         thrusting = true;
     } else if (this.keys.W) {
         // Control con teclado en desktop
-        this.speed += acceleration;
-        if (this.speed >= maxSpeed) this.speed = maxSpeed;
+        this.speed += this.effectiveAcceleration;
+        if (this.speed >= this.effectiveMaxSpeed) this.speed = this.effectiveMaxSpeed;
         thrusting = true;
     }
 
     // --- 5) Desaceleración si no hay empuje
     if (!thrusting) {
-        this.speed -= deceleration;
+        this.speed -= this.deceleration;
         if (this.speed < 0) this.speed = 0;
     }
 
@@ -267,7 +267,8 @@ move() {
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             this.projectiles[i].update(boolean);
             if (this.projectiles[i].collision(this.canvas)) {
-                this.projectiles.splice(i, 1);
+                this.projectiles[i].active = false; // ✅ Devolvemos a la piscina marcándolo como inactivo
+                this.projectiles.splice(i, 1); // Lo quitamos de la lista de activos
             }
         }
     }
@@ -295,6 +296,12 @@ move() {
         // Mostrar disparos disponibles y máximos
         this.hudShots.textContent = this.availableShots;
         this.hudMaxShots.textContent = this.maxShots;
+
+        // ➕ Actualizar el HUD de vida
+        const healthDisplay = document.getElementById('health-display');
+        if (healthDisplay) {
+            healthDisplay.textContent = '❤️'.repeat(this.health);
+        }
     
         // ✅ Lógica de cooldown rediseñada y segura
         if (this.blocked) {
@@ -369,42 +376,39 @@ move() {
             // Lógica de disparo unificada según el tipo de nave
             switch (this.shotType) {
                 case 'single_fast': {
-                    const projectile = new Projectile(
-                        this.ctx, this.spritesheet, { ...this.position }, this.angle
-                    );
-                    projectile.speed = 22; // Hacemos el proyectil más rápido
-                    this.projectiles.push(projectile);
+                    const p = this.projectilePool.get();
+                    if (p) {
+                        p.init({ ...this.position }, this.angle);
+                        p.speed = 22; // Hacemos el proyectil más rápido
+                        this.projectiles.push(p);
+                    }
                     break;
                 }
 
                 case 'spread': {
                     const spreadAngle = 0.25; // Ángulo de dispersión en radianes
-                    // Proyectil central
-                    this.projectiles.push(new Projectile(this.ctx, this.spritesheet, { ...this.position }, this.angle));
-                    // Proyectil izquierdo
-                    this.projectiles.push(new Projectile(this.ctx, this.spritesheet, { ...this.position }, this.angle - spreadAngle));
-                    // Proyectil derecho
-                    this.projectiles.push(new Projectile(this.ctx, this.spritesheet, { ...this.position }, this.angle + spreadAngle));
+                    const p1 = this.projectilePool.get();
+                    if (p1) { p1.init({ ...this.position }, this.angle); this.projectiles.push(p1); }
+                    const p2 = this.projectilePool.get();
+                    if (p2) { p2.init({ ...this.position }, this.angle - spreadAngle); this.projectiles.push(p2); }
+                    const p3 = this.projectilePool.get();
+                    if (p3) { p3.init({ ...this.position }, this.angle + spreadAngle); this.projectiles.push(p3); }
                     break;
                 }
 
                 case 'double':
                 default: {
                     // Disparo doble estándar
-                    this.projectiles.push(
-                        new Projectile(
-                            this.ctx,
-                            this.spritesheet,
-                            { x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 },
-                            this.angle
-                        ),
-                        new Projectile(
-                            this.ctx,
-                            this.spritesheet,
-                            { x: this.position.x - Math.cos(this.angle) * 14, y: this.position.y - Math.sin(this.angle) * 14 },
-                            this.angle
-                        )
-                    );
+                    const p1 = this.projectilePool.get();
+                    if (p1) {
+                        p1.init({ x: this.position.x + Math.cos(this.angle) * 14, y: this.position.y + Math.sin(this.angle) * 14 }, this.angle);
+                        this.projectiles.push(p1);
+                    }
+                    const p2 = this.projectilePool.get();
+                    if (p2) {
+                        p2.init({ x: this.position.x - Math.cos(this.angle) * 14, y: this.position.y - Math.sin(this.angle) * 14 }, this.angle);
+                        this.projectiles.push(p2);
+                    }
                     break;
                 }
             }
@@ -427,6 +431,12 @@ move() {
         if (this.isInvincible || this.isShielded) return;
 
         this.health--;
+
+        // ➕ Actualizar el HUD de vida inmediatamente al recibir daño
+        const healthDisplay = document.getElementById('health-display');
+        if (healthDisplay) {
+            healthDisplay.textContent = '❤️'.repeat(this.health);
+        }
         
         // Activa un breve periodo de invencibilidad para evitar múltiples golpes seguidos.
         this.isInvincible = true;
@@ -448,6 +458,12 @@ move() {
                 this.isShielded = false;
                 this.shieldTimer = null;
             }, 10000); // 10 segundos de duración
+        }
+
+        if (type === 'extraLife') {
+            // ✅ Lógica para que la vida extra se acumule
+            this.maxHealth++; // Aumenta la vida máxima
+            this.health++;    // Aumenta la vida actual
         }
 
         if (type === 'rapidFire') {
@@ -505,6 +521,7 @@ move() {
                 case 'a': this.keys.A = true; break;
                 case 'd': this.keys.D = true; break;
                 case 'w': this.keys.W = true; break;
+                case ' ': // ✅ ' ' es el valor correcto para la barra espaciadora en e.key
                 case 'q':
                 case 'arrowup':
                     this.keys.shoot = false; break;
@@ -515,7 +532,7 @@ move() {
             const key = e.key.toLowerCase();
             if (key === 'a' || key === 'd' || key === 'w') {
                 this.keys[e.key.toUpperCase()] = false;
-            } else if (key === 'q' || key === 'arrowup') {
+            } else if (key === 'q' || key === 'arrowup' || key === ' ') { // ✅ ' ' es el valor correcto
                 this.keys.shoot = true;
             }
         };

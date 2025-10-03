@@ -4,15 +4,21 @@ import { Label } from "./label.js";
 import { Enemy } from "./enemy.js";
 import { Star } from "./star.js";
 import { Explosion } from "./explosion.js";
-import { Boss } from "./boss.js";
+import { Boss } from "./boss.js"; 
 import { PowerUp } from "./powerUp.js";
 import { Projectile } from "./projectile.js";
 import { Particle } from "./particle.js";
 import { AudioManager } from "./AudioManager.js";
+import { Constelation } from "./constelation.js";
+import { Nebula } from "./nebula.js";
 
-
+import { ProjectilePool } from "./ProjectilePool.js";
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+
+// ✅ Canvas para pre-renderizar el fondo
+const backgroundCanvas = document.getElementById('background-canvas');
+const backgroundCtx = backgroundCanvas.getContext('2d');
 
 const spritesheet = document.getElementById('spritesheet');
 const font = window.getComputedStyle(document.body).fontFamily;
@@ -25,7 +31,6 @@ const btnMenu = document.querySelector('.play-game');
 const loadingScreen = document.getElementById('loading-screen');
 const shipSelectionMenu = document.querySelector('.ship-selection-menu');
 const hangarButton = document.querySelector('.hangar-button');
-const backToMenuButton = document.querySelector('.back-to-menu-button');
 const shipOptions = document.querySelectorAll('.ship-option');
 
 const muteIcon = muteButton ? muteButton.querySelector('ion-icon') : null;
@@ -47,6 +52,10 @@ function resizeCanvas() {
         canvas.width = 1000;
         canvas.height = 600;
     }
+
+    // ✅ Sincronizamos el tamaño del canvas de fondo
+    backgroundCanvas.width = canvas.width;
+    backgroundCanvas.height = canvas.height;
     
     // Ajustar el estilo CSS del canvas
     canvas.style.width = canvas.width + 'px';
@@ -98,19 +107,32 @@ let currentBossLevel = 0; // Nivel actual del jefe (0, 1, 2, ...)
 let scoreCount = 0;
 let selectedShipType = 'blue'; // Nave por defecto
 
+// ✅ Creamos las piscinas de proyectiles
+const playerProjectilePool = new ProjectilePool(30, ctx, spritesheet); // Piscina para el jugador
+const enemyProjectilePool = new ProjectilePool(50, ctx, spritesheet);  // Piscina para enemigos (más grande)
+
 const audioManager = new AudioManager();
-let ship = new Ship(ctx, spritesheet, canvas, audioManager, selectedShipType); // Se crea con el tipo seleccionado
+// ✅ Pasamos la piscina de proyectiles a la nave
+let ship = new Ship(ctx, spritesheet, canvas, audioManager, playerProjectilePool, selectedShipType);
+
 const asteroids = [];
 const labels = [];
 const enemies = [];
-const projectilesEnemy = [];
+const projectilesEnemy = []; // ✅ Este array ahora contendrá los proyectiles enemigos ACTIVOS
 const explosions = [];
 const powerUps = [];
 const particles = [];
 const stars = [];
+const nebulas = [];
+let constellation; // ✅ Variable para nuestra constelación
 let highScore = 0;
 let asteroidInterval = null;
 let enemyInterval = null;
+
+// ✅ Variables para la optimización del fondo
+let backgroundNeedsRedraw = true; // Flag para saber si redibujar el fondo
+let lastBackgroundRedraw = 0;
+const backgroundRedrawInterval = 50; // Redibujar el fondo cada 50ms (20 FPS) es suficiente para elementos lentos
 
 // --- COMMON SDK SOLUTIONS & BROWSER FIXES ---
 
@@ -196,9 +218,12 @@ function displayUsername() {
         console.warn("An error occurred while trying to get the username.", e);
     }
 }
-function loadAssets() {
-    audioManager.loadSound('explosion', 'explosion-312361.mp3');
-    audioManager.loadSound('shoot', 'space-battle-sounds-br-95277-VEED.mp3');
+async function loadAssets() {
+    // ✅ Usamos Promise.all para cargar todos los sonidos en paralelo y esperar a que terminen.
+    await Promise.all([
+        audioManager.loadSound('explosion', 'explosion-312361.mp3'),
+        audioManager.loadSound('shoot', 'space-battle-sounds-br-95277-VEED.mp3')
+    ]);
 }
 
 async function loadHighScore() {
@@ -228,7 +253,7 @@ function createResponsiveJoystick() {
     
     if (isMobile && isLandscape) {
         // Móvil horizontal: joystick más pequeño pero área de detección amplia
-        joystickSize = 70;
+        joystickSize = 90;
         catchDistance = 200;
     } else if (isMobile) {
         // Móvil vertical: joystick normal
@@ -236,7 +261,7 @@ function createResponsiveJoystick() {
         catchDistance = 150;
     } else {
         // Desktop: joystick grande
-        joystickSize = 100;
+        joystickSize = 120;
         catchDistance = 200;
     }
     
@@ -332,12 +357,6 @@ async function gameOver() {
     play = false;
     if (crazySDK && crazySDK.game && typeof crazySDK.game.gameplayStop === 'function') {
         try { crazySDK.game.gameplayStop(); } catch(e) { console.warn(e); }
-    }
-
-    // ✅ Reportar la puntuación final al SDK para leaderboards y análisis
-    if (crazySDK && crazySDK.game && typeof crazySDK.game.setScore === 'function') {
-        console.log(`Reporting final score to SDK: ${scoreCount}`);
-        try { crazySDK.game.setScore(scoreCount); } catch(e) { console.warn('Error setting score:', e); }
     }
 
     // Creamos una explosión en la posición de la nave y la ocultamos
@@ -454,7 +473,8 @@ function init() {
     }
 
     // Creamos una nueva instancia de la nave y ella misma se encargará de sus eventos
-    ship = new Ship(ctx, spritesheet, canvas, audioManager, selectedShipType);
+    // ✅ Pasamos la piscina de proyectiles al crear la nueva nave
+    ship = new Ship(ctx, spritesheet, canvas, audioManager, playerProjectilePool, selectedShipType);
     ship.projectiles.length = 0;
     ship.speed = 0;
     ship.angle = 0;
@@ -477,6 +497,11 @@ function init() {
     ship.isRapidFire = false;
     if (ship.rapidFireTimer) clearTimeout(ship.rapidFireTimer);
 
+    // ➕ Actualizar el HUD de vida al iniciar
+    const healthDisplay = document.getElementById('health-display');
+    if (healthDisplay) {
+        healthDisplay.textContent = '❤️'.repeat(ship.health);
+    }
 
     // Reiniciar variables del jefe
     boss = null;
@@ -565,21 +590,14 @@ if (menu) {
 }
 
 // --- Lógica para el menú de selección de nave ---
-if (backToMenuButton) {
-    backToMenuButton.addEventListener('click', () => {
-        shipSelectionMenu.style.display = 'none';
-        menu.style.display = 'flex';
-    });
-}
-
 shipOptions.forEach(option => {
     option.addEventListener('click', () => {
         selectedShipType = option.getAttribute('data-ship-type');
         console.log(`Nave seleccionada: ${selectedShipType}`);
         updateSelectedShipVisual();
-        // Opcional: volver al menú principal automáticamente
-        // shipSelectionMenu.style.display = 'none';
-        // menu.style.display = 'flex';
+        // ✅ Volver al menú principal automáticamente
+        shipSelectionMenu.style.display = 'none';
+        menu.style.display = 'flex';
     });
 });
 
@@ -612,7 +630,10 @@ function spawnSingleAsteroid() {
 }
 
 function spawnSingleEnemy() {
-    let enemy = new Enemy(ctx, spritesheet, canvas, ship, currentEnemySpeed);
+    // ✅ 30% de probabilidad de que sea un 'vigilante', 70% un 'chaser'
+    const enemyType = Math.random() < 0.3 ? 'vigilante' : 'chaser';
+    const speed = enemyType === 'vigilante' ? currentEnemySpeed * 0.8 : currentEnemySpeed;
+    let enemy = new Enemy(ctx, spritesheet, canvas, ship, enemyType, speed);
     enemy.generatePosition(canvas);
     enemies.push(enemy);
     setTimeout(() => {
@@ -625,7 +646,8 @@ function spawnBoss() {
 
     console.log(`¡Aparece el JEFE de nivel ${currentBossLevel}!`);
     bossActive = true;
-    boss = new Boss(ctx, spritesheet, canvas, ship, currentBossLevel);
+    // ✅ Pasamos la piscina de proyectiles al jefe
+    boss = new Boss(ctx, spritesheet, canvas, ship, enemyProjectilePool, currentBossLevel);
 
     // Limpiar enemigos y asteroides existentes para enfocar la batalla
     asteroids.length = 0;
@@ -652,8 +674,17 @@ function collision(Object1, Object2) {
 }
 
 function spawnPowerUp(position) {
-    // 50% de probabilidad para cada tipo de power-up
-    const type = Math.random() < 0.5 ? 'shield' : 'rapidFire';
+    // Aumentamos la probabilidad: 35% vida extra, 35% escudo, 30% disparo rápido
+    const rand = Math.random();
+    let type;
+    if (rand < 0.36) { // 36% de probabilidad
+        type = 'extraLife';
+    } else if (rand < 0.70) { // 35% de probabilidad
+        type = 'shield';
+    } else { // 30% de probabilidad
+        type = 'rapidFire';
+    }
+
     const powerUp = new PowerUp(ctx, spritesheet, { ...position }, type);
     powerUps.push(powerUp);
 }
@@ -697,7 +728,10 @@ function collisionObjects() {
                     if (index > -1) enemies.splice(index, 1);
                 } else if (object instanceof Projectile) {
                     const index = projectilesEnemy.indexOf(object);
-                    if (index > -1) projectilesEnemy.splice(index, 1);
+                    if (index > -1) {
+                        projectilesEnemy[index].active = false; // ✅ Devolvemos a la piscina
+                        projectilesEnemy.splice(index, 1);
+                    }
                 }
                 // No hacemos 'return' para que el escudo pueda destruir múltiples objetos en un frame
             } else {
@@ -711,7 +745,10 @@ function collisionObjects() {
                 // Eliminar el objeto con el que chocó
                 if (object instanceof Asteroid) asteroids.splice(asteroids.indexOf(object), 1);
                 else if (object instanceof Enemy) enemies.splice(enemies.indexOf(object), 1);
-                else if (object instanceof Projectile) projectilesEnemy.splice(projectilesEnemy.indexOf(object), 1);
+                else if (object instanceof Projectile) {
+                    object.active = false; // ✅ Devolvemos a la piscina
+                    projectilesEnemy.splice(projectilesEnemy.indexOf(object), 1);
+                }
 
                 // Comprobar si la vida ha llegado a 0
                 if (ship.health <= 0) {
@@ -729,8 +766,13 @@ function collisionObjects() {
             const powerUp = powerUps[i];
             ship.activatePowerUp(powerUp.type);
 
+            // ➕ Añadir etiqueta de texto para la vida extra
+            if (powerUp.type === 'extraLife') {
+                labels.push(new Label(ctx, { ...powerUp.position }, '+1 Life', '#00ff88', font, fontWeight));
+            }
+
             // ✅ Generamos el efecto de partículas al recoger el power-up
-            const particleColor = powerUp.type === 'shield' ? '#00ccff' : '#ffdd00';
+            const particleColor = powerUp.type === 'shield' ? '#00ccff' : (powerUp.type === 'rapidFire' ? '#ffdd00' : '#00ff88');
             createParticleBurst(powerUp.position, particleColor);
 
             powerUps.splice(i, 1);
@@ -747,7 +789,8 @@ function collisionObjects() {
                 explosions.push(new Explosion(ctx, spritesheet, asteroids[j].position, asteroids[j].scale * 2.5));
                 audioManager.playSound('explosion', 0.6);
                 asteroids.splice(j, 1);
-                projectilesEnemy.splice(i, 1);
+                projectilesEnemy[i].active = false; // ✅ Devolvemos a la piscina
+                projectilesEnemy.splice(i, 1); // Lo quitamos de la lista de activos
                 projectileDestroyed = true;
                 break;
             }
@@ -760,7 +803,10 @@ function collisionObjects() {
             if (collision(projectilesEnemy[i], ship.projectiles[k])) {
                 // Crear una pequeña explosión en el punto de colisión
                 explosions.push(new Explosion(ctx, spritesheet, projectilesEnemy[i].position, 0.4));
-                projectilesEnemy.splice(i, 1);
+                projectilesEnemy[i].active = false; // ✅ Devolvemos a la piscina
+                projectilesEnemy.splice(i, 1); // Lo quitamos de la lista de activos
+                ship.projectiles[k].active = false; // ✅ Devolvemos el proyectil del jugador también
+                ship.projectiles.splice(k, 1);
                 break; // Salir, ya que el proyectil enemigo fue destruido
             }
         }
@@ -773,7 +819,8 @@ function collisionObjects() {
             if (collision(ship.projectiles[i], boss)) {
                 boss.takeDamage(1);
                 explosions.push(new Explosion(ctx, spritesheet, ship.projectiles[i].position, 0.5));
-                ship.projectiles.splice(i, 1);
+                ship.projectiles[i].active = false; // ✅ Devolvemos a la piscina
+                ship.projectiles.splice(i, 1); // Lo quitamos de la lista de activos
 
                 let text = new Label(ctx, { ...boss.position }, '-1 HP', '#ff4444', font, fontWeight);
                 labels.push(text);
@@ -804,7 +851,8 @@ function collisionObjects() {
                 audioManager.playSound('explosion', 0.8);
 
                 enemies.splice(j, 1);
-                ship.projectiles.splice(i, 1);
+                ship.projectiles[i].active = false; // ✅ Devolvemos a la piscina
+                ship.projectiles.splice(i, 1); // Lo quitamos de la lista de activos
                 projectileDestroyed = true;
                 break; 
             }
@@ -834,7 +882,8 @@ function collisionObjects() {
                 }
 
                 asteroids.splice(j, 1);
-                ship.projectiles.splice(i, 1);
+                ship.projectiles[i].active = false; // ✅ Devolvemos a la piscina
+                ship.projectiles.splice(i, 1); // Lo quitamos de la lista de activos
                 break; 
             }
         }
@@ -933,12 +982,33 @@ function checkBossSpawn() {
 }
 
 function background() {
-    // Actualiza el fondo y las estrellas
-    ctx.fillStyle = ' #111111ff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const now = Date.now();
+    // ✅ Solo redibujamos el fondo si es necesario y ha pasado el intervalo
+    // ✅ Se elimina la condición `play` para que el fondo se anime siempre.
+    if (backgroundNeedsRedraw || now - lastBackgroundRedraw > backgroundRedrawInterval) {
+        backgroundCtx.fillStyle = '#111111ff';
+        backgroundCtx.fillRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
+
+        // Dibujamos las nebulosas y constelación en el canvas de fondo
+        if (constellation) constellation.update(); // Actualizamos posiciones
+        nebulas.forEach(nebula => nebula.update());
+
+        // Ahora dibujamos
+        nebulas.forEach(nebula => nebula.draw(backgroundCtx));
+        if (constellation) constellation.draw(backgroundCtx);
+
+        lastBackgroundRedraw = now;
+        backgroundNeedsRedraw = false; // Marcamos que ya no necesita redibujado inmediato
+    }
+
+    // ✅ Dibujamos la imagen pre-renderizada en el canvas principal. ¡Esto es muy rápido!
+    ctx.drawImage(backgroundCanvas, 0, 0);
+
+    // Las estrellas parpadeantes se dibujan encima para mantener su efecto dinámico
     stars.forEach(star => {
         star.update();
     });
+
 }
 function updateObjects(){
     // Solo actualizamos la nave si el juego está activo para que se congele al morir
@@ -957,7 +1027,7 @@ function updateObjects(){
             lastEnemySpawnTime = now;
         }
     } else if (boss) {
-        // Si el jefe está activo, actualízalo
+        // ✅ Corregido: Pasamos la lista de proyectiles enemigos activos al jefe para que pueda disparar.
         boss.update(projectilesEnemy);
     }
 
@@ -978,13 +1048,16 @@ function updateObjects(){
 
     for (let i = projectilesEnemy.length - 1; i >= 0; i--) {
         projectilesEnemy[i].update();
-        // Si los proyectiles enemigos también necesitan ser eliminados al salir de la pantalla,
-        // se debería añadir una lógica similar a la de los proyectiles del jugador.
+        // ✅ Devolver a la piscina si sale de la pantalla
+        if (projectilesEnemy[i].collision(canvas)) {
+            projectilesEnemy[i].active = false;
+            projectilesEnemy.splice(i, 1);
+        }
     }
 
     for (let i = enemies.length - 1; i >= 0; i--) {
         enemies[i].update(hitBox);
-        enemies[i].createProjectile(projectilesEnemy);
+        enemies[i].createProjectile(projectilesEnemy, enemyProjectilePool); // ✅ Pasamos la piscina y la lista de activos
         if (enemies[i].collision(canvas)) {
             enemies.splice(i, 1);
         }
@@ -992,7 +1065,7 @@ function updateObjects(){
 
     for (let i = powerUps.length - 1; i >= 0; i--) {
         powerUps[i].update();
-        powerUps[i].draw();
+        powerUps[i].draw(); // ✅ Añadimos la llamada a draw() que faltaba
         if (hitBox) powerUps[i].hitbox();
         if (powerUps[i].isFinished) powerUps.splice(i, 1);
     }
@@ -1078,8 +1151,20 @@ async function main() {
     // 4. Cargar todos los datos y assets del juego
     await loadHighScore();
     displayUsername();
-    loadAssets();
+    await loadAssets(); // ✅ Añadimos 'await' para esperar a que los sonidos se carguen
     createStars();
+
+    // ✅ Creamos varias nebulosas para un fondo más rico
+    for (let i = 0; i < 3; i++) {
+        const position = { x: Math.random() * canvas.width, y: Math.random() * canvas.height };
+        nebulas.push(new Nebula(ctx, canvas, position, 200, 250)); // Reducimos partículas para un rendimiento inicial más rápido
+    }
+  
+
+    // ✅ Creamos la constelación con menos estrellas en móviles para mejor rendimiento
+    const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
+    const starCount = isMobile ? 40 : 80; // 40 estrellas en móvil, 80 en desktop
+    constellation = new Constelation(ctx, canvas, starCount);
 
     // 5. Iniciar el bucle del juego
     update();

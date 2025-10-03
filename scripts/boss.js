@@ -2,11 +2,12 @@ import { Object } from "./object.js";
 import { Projectile } from "./projectile.js";
 
 export class Boss {
-    constructor(ctx, spritesheet, canvas, ship, level = 0) {
+    constructor(ctx, spritesheet, canvas, ship, projectilePool, level = 0) {
         this.ctx = ctx;
         this.spritesheet = spritesheet;
         this.canvas = canvas;
         this.ship = ship;
+        this.projectilePool = projectilePool; // ✅ Guardamos la piscina
         this.level = level;
 
         const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
@@ -66,7 +67,7 @@ export class Boss {
         }
     }
 
-    attack(projectiles) {
+    attack(activeProjectiles) {
         const now = Date.now();
         if (now - this.lastShotTime < this.shotCooldown) return;
 
@@ -74,22 +75,19 @@ export class Boss {
 
         // Dispara 3 proyectiles en un cono hacia el jugador
         const angleToPlayer = Math.atan2(this.ship.position.y - this.position.y, this.ship.position.x - this.position.x);
-        
+
         for (let i = -1; i <= 1; i++) {
             const angle = angleToPlayer + (i * 0.2); // 0.2 radianes de separación
-            let projectile = new Projectile(
-                this.ctx,
-                this.spritesheet,
-                { ...this.position },
-                angle + Math.PI / -2, // Ajuste de ángulo para el sprite del proyectil
-                true // Tipo de proyectil enemigo
-            );
-            projectile.speed = 6;
-            projectiles.push(projectile);
+            const projectile = this.projectilePool.get();
+            if (projectile) {
+                projectile.init({ ...this.position }, angle + Math.PI / -2, true);
+                projectile.speed = 6;
+                activeProjectiles.push(projectile);
+            }
         }
     }
 
-    update(projectiles) {
+    update(activeProjectiles) { // ✅ El parámetro ya estaba aquí, solo confirmamos que se usa.
         if (this.isEntering) {
             // Fase de entrada: el jefe baja hasta su posición
             this.position.y += this.speed * 2;
@@ -109,7 +107,7 @@ export class Boss {
                 this.moveDirection = 1;
             }
 
-            this.attack(projectiles);
+            this.attack(activeProjectiles); // ✅ Se pasa la lista al método de ataque.
         }
 
         this.draw();
@@ -123,4 +121,3 @@ export class Boss {
         this.ctx.stroke();
     }
 }   
-
