@@ -32,6 +32,9 @@ export class Enemy {
             this.imageParts = new Object(spritesheet, { x: 992, y: 564 }, 37, 72, 0.54 * mobileScale);
         }
     }
+    takeDamage(amount) {
+        this.death = true; // Marcamos al enemigo para ser eliminado
+    }
         draw() {
         this.ctx.save();
 
@@ -93,7 +96,10 @@ export class Enemy {
         this.lastShotTime = Date.now();
     }
         collision(canvas) {
-        if ((this.position.x - this.image.radio > canvas.width || this.position.y - this.image.radio > canvas.height || this.position.x + this.image.radio < 0 || this.position.y + this.image.radio < 0) && this.death) {
+        // ✅ Comprueba si el enemigo está fuera de los límites del canvas
+        const buffer = 100; // Un margen extra
+        if (this.position.x + this.image.radio < -buffer || this.position.x - this.image.radio > canvas.width + buffer ||
+            this.position.y + this.image.radio < -buffer || this.position.y - this.image.radio > canvas.height + buffer) {
             return true;
         }
         return false;

@@ -16,19 +16,31 @@ export class Explosion {
      * @param {{x: number, y: number}} position La posición central de la explosión.
      * @param {number} scale El tamaño base de la explosión.
      */
-    constructor(ctx, spritesheet, position, scale = 1) {
+    constructor(ctx, spritesheet, position, scale = 1, isFinished = false) {
         this.ctx = ctx;
-        this.position = position;
         
         // Usamos una imagen de explosión del spritesheet.
         // Coordenadas para 'explosion.png' en spaceShooter2_spritesheet.png
         this.image = new Object(spritesheet, {x: 874, y: 194}, 44, 50, 0.1);
         
+        this.isFinished = isFinished;
+
+        if (!isFinished) {
+            this.init(position, scale);
+        }
+    }
+
+    /**
+     * ✅ Reinicia la explosión con nuevos valores para ser reutilizada.
+     * @param {{x: number, y: number}} position
+     * @param {number} scale
+     */
+    init(position, scale) {
+        this.position = position;
         this.initialScale = scale;
         this.image.scale = 0.1 * this.initialScale; // Empezamos pequeños
         this.opacity = 1.0;
         this.rotation = Math.random() * Math.PI * 2; // Rotación aleatoria para variedad
-        
         this.isFinished = false;
     }
 

@@ -14,9 +14,16 @@
     <div class="game">
     <canvas id="canvas"></canvas>
 
-    <button class="button">
+    <!-- ✅ Cambiado a div con un ID único para evitar conflictos y mejorar la selección -->
+
+    <div id="shoot-button" class="button">
          <ion-icon name="rocket-outline"></ion-icon>
-    </button>
+    </div>
+
+    <!-- ✅ Nuevo botón para la súper habilidad -->
+    <div id="super-button" class="button">
+        <ion-icon name="flash-outline"></ion-icon>
+    </div>
 
     <!-- Contenedor para el joystick -->
     <div id="joystick-zone" style="
@@ -46,6 +53,7 @@
     </div>
     <div id="cooldown" style="margin-top:5px;  color:#ff4444;  font-weight:bold;"></div>
     <div id="recharge" style="margin-top:5px;  color:#00ff88;"></div>
+    <div id="super-hud" style="margin-top:5px; color:#00ffff; font-weight:bold;"></div>
 </div>
 
 <!-- ➕ Contenedor para la vida de la nave -->
@@ -74,6 +82,24 @@
         <ion-icon name="volume-high-outline"></ion-icon>
     </div>
 
+    <div id="gift-button" class="hud-button gift-button">
+        <ion-icon name="gift-sharp"></ion-icon>
+    </div>
+
+    <div id="player-currency-container" class="hud-text" style="position: absolute; top: 50px; left: 10px; display: none;">
+        Crystals: <span id="player-crystals">0</span>
+    </div>
+
+
+    <div id="reward-menu" style="display: none;">
+        <div class="reward-content">
+            <h2>Get Crystals</h2>
+            <button class="button-reward" id="bonus-ad-100">+100 💎</button>
+            <button class="button-reward" id="bonus-ad-250">+250 💎</button>
+            <button class="button-reward" id="bonus-ad-500">+500 💎</button>
+            <button class="button-close" id="close-reward-menu">Close</button>
+        </div>
+    </div>
     <div class="menu">
         <h2>Astro Blaze</h2>
         <div class="menuElement play-game">
@@ -96,6 +122,7 @@
     <!-- Menú de Selección de Nave (Oculto por defecto) -->
     <div class="ship-selection-menu" style="display: none;">
         <h2>CHOOSE YOUR SHIP</h2>
+
         <div class="ship-options">
             <!-- Opción 1: Nave Azul (Por defecto) -->
             <div class="ship-option" data-ship-type="blue">
@@ -103,6 +130,17 @@
                 <div class="ship-text-content">
                     <h3>Blazer</h3>
                     <p>Balanced Stats</p>
+                </div>
+                <div class="upgrade-section">
+                    <button class="upgrade-button" data-upgrade-id="blue_max_shots" data-cost="100">
+                        +2 Max Shots (100)
+                    </button>
+                    <button class="upgrade-button" data-upgrade-id="blue_max_speed" data-cost="150">
+                        +1 Max Speed (150)
+                    </button>
+                    <button class="upgrade-button" data-upgrade-id="blue_health" data-cost="200">
+                        +1 Health (200)
+                    </button>
                 </div>
             </div>
             <!-- Opción 2: Nave Verde -->
@@ -112,6 +150,17 @@
                     <h3>Interceptor</h3>
                     <p>High Speed</p>
                 </div>
+                <div class="upgrade-section">
+                    <button class="upgrade-button" data-upgrade-id="green_max_shots" data-cost="100">
+                        +2 Max Shots (100)
+                    </button>
+                    <button class="upgrade-button" data-upgrade-id="green_max_speed" data-cost="150">
+                        +1 Max Speed (150)
+                    </button>
+                    <button class="upgrade-button" data-upgrade-id="green_health" data-cost="200">
+                        +1 Health (200)
+                    </button>
+                </div>
             </div>
             <!-- Opción 3: Nave Roja -->
             <div class="ship-option" data-ship-type="red">
@@ -119,6 +168,67 @@
                  <div class="ship-text-content">
                     <h3>Vindicator</h3>
                     <p>Heavy Armor</p>
+                </div>
+                <div class="upgrade-section">
+                    <button class="upgrade-button" data-upgrade-id="red_max_shots" data-cost="100">
+                        +2 Max Shots (100)
+                    </button>
+                    <button class="upgrade-button" data-upgrade-id="red_max_speed" data-cost="150">
+                        +1 Max Speed (150)
+                    </button>
+                    <button class="upgrade-button" data-upgrade-id="red_health" data-cost="200">
+                        +1 Health (200)
+                    </button>
+                </div>
+            </div>
+            <!-- Opción 4: Nave Dorada (Bloqueada) -->
+            <div class="ship-option locked" data-ship-type="gold" id="gold-ship-option">
+                <div class="ship-preview ship-locked">
+                    <span class="question-mark">?</span>
+                </div>
+                <div class="ship-text-content">
+                    <h3 id="gold-ship-name">???</h3>
+                    <p id="gold-ship-desc">Unlock this Legendary Ship</p>
+                </div>
+                <div class="upgrade-section" id="gold-ship-upgrades">
+                    <button class="unlock-button" id="unlock-gold-ship" data-cost="1500">
+                        Unlock (1500)
+                    </button>
+                    <!-- ✅ Ocultos por defecto, se mostrarán con JS al desbloquear -->
+                    <button class="upgrade-button gold-upgrade" data-upgrade-id="gold_max_shots" data-cost="150" style="display: none;">
+                        +2 Max Shots (150)
+                    </button>
+                    <button class="upgrade-button gold-upgrade" data-upgrade-id="gold_max_speed" data-cost="200" style="display: none;">
+                        +1 Max Speed (200)
+                    </button>
+                    <button class="upgrade-button gold-upgrade" data-upgrade-id="gold_health" data-cost="250" style="display: none;">
+                        +1 Health (250)
+                    </button>
+                </div>
+            </div>
+            <!-- Opción 5: Nave Mariposa (Bloqueada) -->
+            <div class="ship-option locked" data-ship-type="butterfly" id="butterfly-ship-option">
+                <div class="ship-preview ship-locked">
+                    <span class="question-mark">?</span>
+                </div>
+                <div class="ship-text-content">
+                    <h3 id="butterfly-ship-name">???</h3>
+                    <p id="butterfly-ship-desc">A mysterious fighter...</p>
+                </div>
+                <div class="upgrade-section" id="butterfly-ship-upgrades">
+                    <button class="unlock-button" id="unlock-butterfly-ship" data-cost="750">
+                        Unlock (750)
+                    </button>
+                    <!-- Ocultos por defecto -->
+                    <button class="upgrade-button butterfly-upgrade" data-upgrade-id="butterfly_max_shots" data-cost="120" style="display: none;">
+                        +2 Max Shots (120)
+                    </button>
+                    <button class="upgrade-button butterfly-upgrade" data-upgrade-id="butterfly_max_speed" data-cost="170" style="display: none;">
+                        +1 Max Speed (170)
+                    </button>
+                    <button class="upgrade-button butterfly-upgrade" data-upgrade-id="butterfly_health" data-cost="220" style="display: none;">
+                        +1 Health (220)
+                    </button>
                 </div>
             </div>
         </div>
@@ -135,7 +245,7 @@
 
     <!-- Outer container (responsive, centrado). Dentro hay un slot con tamaño exacto -->
     <div id="banner-container"
-         style="position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;align-items:flex-end;z-index:2000;pointer-events:auto;">
+         style="position:fixed;left:0;right:0;bottom:0;display:none;justify-content:center;align-items:flex-end;z-index:2000;pointer-events:none;">
       <!-- ESTE es el ID que pasaremos al SDK: banner-slot -->
       <div id="banner-slot" style="width:728px; height:90px;"></div>
     </div>
@@ -166,7 +276,12 @@
     </script>
     <script src="scripts/boss.js" type="module"></script>
     <script src="scripts/particle.js" type="module"></script>
+    <script src="scripts/superBeam.js" type="module"></script>
+    <script src="scripts/continuousBeam.js" type="module"></script>
+    <script src="scripts/destructiveShield.js" type="module"></script>
+    <script src="scripts/bossBeam.js" type="module"></script>
     <script src="scripts/script.js" type="module"></script>
+    <script src="scripts/TornadoBeam.js" type="module"></script>
    
 </body>
 </html>

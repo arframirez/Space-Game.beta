@@ -10,6 +10,8 @@ export class Projectile {
         this.speed = 15;
         this.type = false; // false para jugador, true para enemigo
         this.active = false; // ✅ La propiedad clave para el object pooling
+        this.fromGoldShip = false; // ✅ Nuevo flag para proyectiles de la nave dorada
+        this.deflected = false; // Para evitar múltiples desvíos
 
         // 📱 Escala dinámica para móviles
         const isMobile = window.innerWidth <= 768 || window.innerHeight <= 768;
@@ -26,11 +28,14 @@ export class Projectile {
     /**
      * ✅ Inicializa o "resetea" un proyectil de la piscina con nuevos valores.
      */
-    init(position, angle, type = false) {
+    init(position, angle, type = false, fromGoldShip = false) {
         this.position = position;
         this.angle = angle;
         this.type = type;
         this.image = type ? this.enemyImage : this.playerImage;
+        this.speed = 15; // ✅ Reiniciamos la velocidad a su valor por defecto.
+        this.fromGoldShip = fromGoldShip; // ✅ Asignamos el flag
+        this.deflected = false; // Reseteamos el estado de desvío
         this.active = true;
     }
 
@@ -51,11 +56,19 @@ export class Projectile {
     }
     draw() {
         this.ctx.save();
-
+        // ✅ Aseguramos el renderizado pixelado para los proyectiles
+        this.ctx.imageSmoothingEnabled = false;
         
         this.ctx.translate(this.position.x, this.position.y);
-        this.ctx.rotate(this.angle + Math.PI);
+        if (this.fromGoldShip) { // fromGoldShip ahora significa "fromInvertedShip"
+            this.ctx.rotate(this.angle); // ✅ Rotación invertida para la nave dorada
+        } else {
+            this.ctx.rotate(this.angle + Math.PI);
+        }
         this.ctx.translate(-this.position.x, -this.position.y);
+
+        // Si el proyectil fue desviado, usamos la imagen del jugador
+        this.image = this.type ? this.enemyImage : this.playerImage;
         this.image.draw(this.ctx, {x: this.position.x, y: this.position.y});
         if (!this.type) {
              this.playerImageEff.draw(this.ctx, {x: this.position.x, y: this.position.y+18});
@@ -65,7 +78,13 @@ export class Projectile {
     update(boolean) {
         this.draw();
         if (boolean) this.hitbox();
-        this.position.x += Math.cos(this.angle-Math.PI/-2) * this.speed;
-        this.position.y += Math.sin(this.angle-Math.PI/-2) * this.speed;
+        const movementAngle = this.angle - Math.PI / -2;
+        if (this.fromGoldShip) { // ✅ Movimiento invertido para naves especiales
+            this.position.x -= Math.cos(movementAngle) * this.speed;
+            this.position.y -= Math.sin(movementAngle) * this.speed;
+        } else {
+            this.position.x += Math.cos(movementAngle) * this.speed;
+            this.position.y += Math.sin(movementAngle) * this.speed;
+        }
     }
 }

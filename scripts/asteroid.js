@@ -21,6 +21,10 @@ export  class Asteroid {
         this.speed = Math.random() * (maxSpeed - minSpeed) + minSpeed; // Usamos el rango de velocidad pasado
         this.createAsteroid();
     }
+    takeDamage(amount) {
+        this.death = true; // Marcamos el asteroide para ser eliminado
+    }
+
     createAsteroid(){
         let num = Math.floor(Math.random() * (4-1+1)) + 1;
     switch(num) {
@@ -63,7 +67,10 @@ export  class Asteroid {
         this.position = { x:x, y:y };
     }
     collision(canvas) {
-        if ((this.position.x - this.image.radio > canvas.width || this.position.y - this.image.radio > canvas.height || this.position.x + this.image.radio < 0 || this.position.y + this.image.radio < 0) && this.death) {
+        // ✅ Comprueba si el asteroide está fuera de los límites del canvas
+        const buffer = 100; // Un margen extra para que no desaparezcan justo en el borde
+        if (this.position.x + this.image.radio < -buffer || this.position.x - this.image.radio > canvas.width + buffer ||
+            this.position.y + this.image.radio < -buffer || this.position.y - this.image.radio > canvas.height + buffer) {
             return true;
         }
         return false;

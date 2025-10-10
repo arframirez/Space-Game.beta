@@ -8,9 +8,14 @@ export class AudioManager {
         // Se inicializa en un estado "suspendido" hasta que el usuario interactúa.
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         // ✅ Creamos un nodo de ganancia (volumen) principal. Todos los sonidos pasarán por aquí.
+        this.musicSource = null; // ✅ Para tener una referencia a la música de fondo
+
+        // ✅ Creamos un nodo de ganancia para la música, que se conecta al principal.
         this.masterGain = this.audioContext.createGain();
         this.masterGain.connect(this.audioContext.destination);
-        this.volume = 1.0; // El volumen ahora controla el GainNode.
+        this.musicGain = this.audioContext.createGain();
+        this.musicGain.connect(this.masterGain);
+        this.volume = 0.25; // El volumen ahora controla el GainNode.
     }
 
     /** Desbloquea el contexto de audio, necesario en los navegadores modernos. */
@@ -67,11 +72,54 @@ export class AudioManager {
         source.start(0);
     }
 
+    /**
+     * Reproduce una pista de música en bucle.
+     * @param {string} name - El nombre de la pista de música a reproducir.
+     * @param {number} [volume=0.5] - El volumen específico para la música.
+     */
+    playMusic(name, volume = 0.5) {
+        // Si ya hay música sonando, la detenemos primero.
+        if (this.musicSource) {
+            this.musicSource.stop();
+        }
+
+        const musicBuffer = this.sounds[name];
+        if (!musicBuffer) return;
+
+        this.unlockAudio();
+
+        this.musicSource = this.audioContext.createBufferSource();
+        this.musicSource.buffer = musicBuffer;
+        this.musicSource.loop = true; // ✅ La clave para que se repita
+
+        // Ajustamos el volumen de la música a través de su propio GainNode
+        this.musicGain.gain.value = volume;
+
+        // Conectamos la fuente al nodo de ganancia de la música.
+        this.musicSource.connect(this.musicGain);
+
+        this.musicSource.start(0);
+    }
+
+    /**
+     * Detiene la música de fondo que se esté reproduciendo.
+     */
+    stopMusic() {
+        if (this.musicSource) {
+            this.musicSource.stop();
+            this.musicSource = null;
+        }
+    }
+
     // ✅ Setter para el volumen que controla el nodo de ganancia maestro.
     set volume(value) {
         this._volume = value;
         if (this.masterGain) {
             this.masterGain.gain.value = this._volume;
         }
+    }
+
+    get volume() {
+        return this._volume;
     }
  }
